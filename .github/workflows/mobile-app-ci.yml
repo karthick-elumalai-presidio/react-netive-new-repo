@@ -56,16 +56,21 @@ jobs:
       - name: Setup Fastlane Configuration
         run: |
           echo "Setting up Fastlane configuration..."
+          echo "Current directory: $(pwd)"
+          echo "Contents before setup:"
+          ls -la
+          echo "Android directory status:"
+          ls -la android/ || echo "Android directory does not exist"
           
           # Ensure android directory exists
           if [ ! -d "android" ]; then
+            echo "Creating android directory..."
             mkdir -p android
           fi
           
-          # Create Android Gemfile if it doesn't exist
-          if [ ! -f "android/Gemfile" ]; then
-            echo "Creating Android Gemfile..."
-            cat > android/Gemfile << EOF
+          # Always create/recreate Android Gemfile to ensure it exists
+          echo "Creating Android Gemfile..."
+          cat > android/Gemfile << EOF
 source "https://rubygems.org"
 
 gem "fastlane"
@@ -73,7 +78,8 @@ gem "fastlane"
 plugins_path = File.join(File.dirname(__FILE__), 'fastlane', 'Pluginfile')
 eval_gemfile(plugins_path) if File.exist?(plugins_path)
 EOF
-          fi
+          echo "Android Gemfile created:"
+          cat android/Gemfile
           
           # Create Android Fastfile if it doesn't exist
           if [ ! -d "android/fastlane" ]; then
@@ -99,13 +105,13 @@ EOF
           
           # Ensure ios directory exists
           if [ ! -d "ios" ]; then
+            echo "Creating ios directory..."
             mkdir -p ios
           fi
           
-          # Create iOS Gemfile if it doesn't exist
-          if [ ! -f "ios/Gemfile" ]; then
-            echo "Creating iOS Gemfile..."
-            cat > ios/Gemfile << EOF
+          # Always create/recreate iOS Gemfile to ensure it exists
+          echo "Creating iOS Gemfile..."
+          cat > ios/Gemfile << EOF
 source "https://rubygems.org"
 
 gem "fastlane"
@@ -113,7 +119,8 @@ gem "fastlane"
 plugins_path = File.join(File.dirname(__FILE__), 'fastlane', 'Pluginfile')
 eval_gemfile(plugins_path) if File.exist?(plugins_path)
 EOF
-          fi
+          echo "iOS Gemfile created:"
+          cat ios/Gemfile
           
           # Create iOS Fastfile if it doesn't exist
           if [ ! -d "ios/fastlane" ]; then
@@ -138,11 +145,20 @@ end
 EOF
           fi
           
-          echo "Final Fastlane setup:"
-          echo "Android:"
+          echo "Final Fastlane setup verification:"
+          echo "Android directory contents:"
           ls -la android/ || echo "No android directory"
-          echo "iOS:"
+          echo "Android Gemfile contents:"
+          cat android/Gemfile || echo "No Android Gemfile"
+          echo "Android fastlane directory:"
+          ls -la android/fastlane/ || echo "No android fastlane directory"
+          
+          echo "iOS directory contents:"
           ls -la ios/ || echo "No ios directory"
+          echo "iOS Gemfile contents:"
+          cat ios/Gemfile || echo "No iOS Gemfile"
+          echo "iOS fastlane directory:"
+          ls -la ios/fastlane/ || echo "No ios fastlane directory"
 
       # Android Build Setup
       - name: Setup Java for Android
