@@ -1,0 +1,340 @@
+trigger:
+  branches:
+    include:
+      - develop
+      - main
+      - qa
+
+pr:
+  branches:
+    include:
+      - develop
+      - main
+      - qa
+
+parameters:
+  - name: environment
+    displayName: Environment
+    type: string
+    default: development
+    values:
+      - development
+      - qa
+      - production
+  - name: platform
+    displayName: Platform
+    type: string
+    default: all
+    values:
+      - ios
+      - android
+      - all
+
+variables:
+  - name: NODE_VERSION
+    value: '18.x'
+  - name: RUBY_VERSION
+    value: '3.1'
+  - name: APP_ENV
+    ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
+      value: 'production'
+    ${{ if eq(variables['Build.SourceBranchName'], 'qa') }}:
+      value: 'qa'
+    ${{ if ne(variables['Build.SourceBranchName'], 'main') }}:
+      ${{ if ne(variables['Build.SourceBranchName'], 'qa') }}:
+        value: 'development'
+
+stages:
+  # PR Validation Stage
+  - stage: Validate
+    displayName: 'PR Validation'
+    condition: eq(variables['Build.Reason'], 'PullRequest')
+    jobs:
+      - job: CodeQualityAndTests
+        displayName: 'Code Quality & Tests'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(NODE_VERSION)
+            displayName: 'Install Node.js'
+
+          - script: |
+              echo "Node version: $(node --version)"
+              echo "NPM version: $(npm --version)"
+              echo "Branch: $(Build.SourceBranchName)"
+              echo "PR: $(System.PullRequest.PullRequestNumber)"
+            displayName: 'Environment Info'
+
+          - script: |
+              curl -fsSL https://bun.sh/install | bash
+              echo "##vso[task.setvariable variable=BUN_HOME]$HOME/.bun"
+              echo "##vso[task.prependpath]$HOME/.bun/bin"
+              bun install --frozen-lockfile
+            displayName: 'Install Dependencies (Bun)'
+
+          - script: |
+              npm run lint
+              npm run format:check
+              npm run type-check
+            displayName: 'Code Quality Checks'
+            continueOnError: true
+
+          - script: npm run test:coverage
+            displayName: 'Run Tests'
+
+          - task: PublishTestResults@2
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/junit.xml'
+              mergeTestResults: true
+              testRunTitle: 'Unit Tests'
+            displayName: 'Publish Test Results'
+            condition: succeededOrFailed()
+
+          - task: PublishCodeCoverageResults@1
+            inputs:
+              codeCoverageTool: 'Cobertura'
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage/cobertura-coverage.xml'
+              reportDirectory: '$(System.DefaultWorkingDirectory)/coverage'
+            displayName: 'Publish Code Coverage'
+            condition: succeededOrFailed()
+
+  # Development Build Stage
+  - stage: Development
+    displayName: 'Development Build'
+    condition: or(eq(variables['Build.SourceBranchName'], 'develop'), and(eq(variables['Build.Reason'], 'Manual'), eq('${{ parameters.environment }}', 'development')))
+    jobs:
+      - job: AndroidBuild
+        displayName: 'Android Build'
+        condition: or(eq('${{ parameters.platform }}', 'android'), eq('${{ parameters.platform }}', 'all'))
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(NODE_VERSION)
+            displayName: 'Install Node.js'
+
+          - task: JavaToolInstaller@0
+            inputs:
+              versionSpec: '17'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+            displayName: 'Install Java'
+
+          - task: UseRubyVersion@0
+            inputs:
+              versionSpec: $(RUBY_VERSION)
+              addToPath: true
+            displayName: 'Install Ruby'
+
+          - script: |
+              curl -fsSL https://bun.sh/install | bash
+              echo "##vso[task.setvariable variable=BUN_HOME]$HOME/.bun"
+              echo "##vso[task.prependpath]$HOME/.bun/bin"
+              bun install --frozen-lockfile
+            displayName: 'Install Dependencies (Bun)'
+
+          - script: |
+              cd android
+              bundle install
+              bundle exec fastlane build
+            displayName: 'Android Build'
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              pathToPublish: 'android/app/build/outputs/apk/debug'
+              artifactName: 'android-dev-build'
+            displayName: 'Publish Android Build'
+
+  # QA Build Stage
+  - stage: QA
+    displayName: 'QA Build'
+    condition: or(eq(variables['Build.SourceBranchName'], 'qa'), and(eq(variables['Build.Reason'], 'Manual'), eq('${{ parameters.environment }}', 'qa')))
+    jobs:
+      - job: AndroidBuild
+        displayName: 'Android Build'
+        condition: or(eq('${{ parameters.platform }}', 'android'), eq('${{ parameters.platform }}', 'all'))
+        pool:
+          vmImage: 'macos-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(NODE_VERSION)
+            displayName: 'Install Node.js'
+
+          - task: JavaToolInstaller@0
+            inputs:
+              versionSpec: '17'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+            displayName: 'Install Java'
+
+          - task: UseRubyVersion@0
+            inputs:
+              versionSpec: $(RUBY_VERSION)
+              addToPath: true
+            displayName: 'Install Ruby'
+
+          - script: |
+              curl -fsSL https://bun.sh/install | bash
+              echo "##vso[task.setvariable variable=BUN_HOME]$HOME/.bun"
+              echo "##vso[task.prependpath]$HOME/.bun/bin"
+              bun install --frozen-lockfile
+            displayName: 'Install Dependencies (Bun)'
+
+          - script: |
+              cd android
+              bundle install
+              bundle exec fastlane build_release
+              bundle exec fastlane deploy_beta
+            displayName: 'Android Build & Deploy'
+            env:
+              GOOGLE_PLAY_JSON_KEY_PATH: $(GOOGLE_PLAY_JSON_KEY_PATH)
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              pathToPublish: 'android/app/build/outputs'
+              artifactName: 'android-qa-build'
+            displayName: 'Publish Android Build'
+
+      - job: iOSBuild
+        displayName: 'iOS Build'
+        condition: or(eq('${{ parameters.platform }}', 'ios'), eq('${{ parameters.platform }}', 'all'))
+        pool:
+          vmImage: 'macos-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(NODE_VERSION)
+            displayName: 'Install Node.js'
+
+          - task: UseRubyVersion@0
+            inputs:
+              versionSpec: $(RUBY_VERSION)
+              addToPath: true
+            displayName: 'Install Ruby'
+
+          - script: npm ci
+            displayName: 'Install Dependencies'
+
+          - script: |
+              cd ios
+              bundle install
+              bundle exec fastlane match_appstore
+              bundle exec fastlane deploy_testflight
+            displayName: 'iOS Build & Deploy'
+            env:
+              MATCH_GIT_URL: $(MATCH_GIT_URL)
+              MATCH_PASSWORD: $(MATCH_PASSWORD)
+              APPLE_ID: $(APPLE_ID)
+              APPLE_TEAM_ID: $(APPLE_TEAM_ID)
+              FASTLANE_PASSWORD: $(FASTLANE_PASSWORD)
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              pathToPublish: 'ios/build'
+              artifactName: 'ios-qa-build'
+            displayName: 'Publish iOS Build'
+
+  # Production Build Stage
+  - stage: Production
+    displayName: 'Production Build'
+    condition: or(eq(variables['Build.SourceBranchName'], 'main'), and(eq(variables['Build.Reason'], 'Manual'), eq('${{ parameters.environment }}', 'production')))
+    jobs:
+      - job: Approval
+        displayName: 'Production Approval'
+        pool: server
+        timeoutInMinutes: 4320 # 3 days
+        steps:
+          - task: ManualValidation@0
+            timeoutInMinutes: 4320 # 3 days
+            inputs:
+              notifyUsers: ''
+              instructions: 'Please validate and approve the production deployment'
+              onTimeout: 'reject'
+
+      - job: AndroidBuild
+        displayName: 'Android Build'
+        dependsOn: Approval
+        condition: or(eq('${{ parameters.platform }}', 'android'), eq('${{ parameters.platform }}', 'all'))
+        pool:
+          vmImage: 'macos-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(NODE_VERSION)
+            displayName: 'Install Node.js'
+
+          - task: JavaToolInstaller@0
+            inputs:
+              versionSpec: '17'
+              jdkArchitectureOption: 'x64'
+              jdkSourceOption: 'PreInstalled'
+            displayName: 'Install Java'
+
+          - task: UseRubyVersion@0
+            inputs:
+              versionSpec: $(RUBY_VERSION)
+              addToPath: true
+            displayName: 'Install Ruby'
+
+          - script: npm ci
+            displayName: 'Install Dependencies'
+
+          - script: |
+              cd android
+              bundle install
+              bundle exec fastlane build_release
+              bundle exec fastlane deploy_production
+            displayName: 'Android Build & Deploy'
+            env:
+              GOOGLE_PLAY_JSON_KEY_PATH: $(GOOGLE_PLAY_JSON_KEY_PATH)
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              pathToPublish: 'android/app/build/outputs'
+              artifactName: 'android-prod-build'
+            displayName: 'Publish Android Build'
+
+      - job: iOSBuild
+        displayName: 'iOS Build'
+        dependsOn: Approval
+        condition: or(eq('${{ parameters.platform }}', 'ios'), eq('${{ parameters.platform }}', 'all'))
+        pool:
+          vmImage: 'macos-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(NODE_VERSION)
+            displayName: 'Install Node.js'
+
+          - task: UseRubyVersion@0
+            inputs:
+              versionSpec: $(RUBY_VERSION)
+              addToPath: true
+            displayName: 'Install Ruby'
+
+          - script: npm ci
+            displayName: 'Install Dependencies'
+
+          - script: |
+              cd ios
+              bundle install
+              bundle exec fastlane match_appstore
+              bundle exec fastlane deploy_appstore
+            displayName: 'iOS Build & Deploy'
+            env:
+              MATCH_GIT_URL: $(MATCH_GIT_URL)
+              MATCH_PASSWORD: $(MATCH_PASSWORD)
+              APPLE_ID: $(APPLE_ID)
+              APPLE_TEAM_ID: $(APPLE_TEAM_ID)
+              FASTLANE_PASSWORD: $(FASTLANE_PASSWORD)
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              pathToPublish: 'ios/build'
+              artifactName: 'ios-prod-build'
+            displayName: 'Publish iOS Build'

@@ -1,0 +1,41 @@
+name: Mobile App CI
+
+on:
+  push:
+    branches: [ develop ]
+  pull_request:
+    branches: [ develop ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Lint (Develop)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Use Bun for dependency installation to avoid npm/yarn lockfile cache requirement
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.1.x'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Environment Info
+        run: |
+          echo "Node: $(node -v)"
+          echo "Bun: $(bun -v)"
+          echo "Branch: ${{ github.ref_name }}"
+
+      - name: Lint
+        run: |
+          bun run lint || true
+
+      - name: Build web (sanity)
+        run: |
+          echo "Running expo prebuild (no native build in CI yet)"
+          bun run prebuild --platform android
+
