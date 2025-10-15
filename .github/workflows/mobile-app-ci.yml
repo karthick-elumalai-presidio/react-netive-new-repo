@@ -70,14 +70,12 @@ jobs:
           
           # Always create/recreate Android Gemfile to ensure it exists
           echo "Creating Android Gemfile..."
-          cat > android/Gemfile << EOF
-source "https://rubygems.org"
-
-gem "fastlane"
-
-plugins_path = File.join(File.dirname(__FILE__), 'fastlane', 'Pluginfile')
-eval_gemfile(plugins_path) if File.exist?(plugins_path)
-EOF
+          echo 'source "https://rubygems.org"' > android/Gemfile
+          echo '' >> android/Gemfile
+          echo 'gem "fastlane"' >> android/Gemfile
+          echo '' >> android/Gemfile
+          echo 'plugins_path = File.join(File.dirname(__FILE__), '\''fastlane'\'', '\''Pluginfile'\'')' >> android/Gemfile
+          echo 'eval_gemfile(plugins_path) if File.exist?(plugins_path)' >> android/Gemfile
           echo "Android Gemfile created:"
           cat android/Gemfile
           
@@ -88,19 +86,17 @@ EOF
           
           if [ ! -f "android/fastlane/Fastfile" ]; then
             echo "Creating Android Fastfile..."
-            cat > android/fastlane/Fastfile << 'EOF'
-default_platform(:android)
-
-platform :android do
-  desc "Build debug APK"
-  lane :build_debug do
-    gradle(
-      task: "assembleDebug",
-      project_dir: "."
-    )
-  end
-end
-EOF
+            echo 'default_platform(:android)' > android/fastlane/Fastfile
+            echo '' >> android/fastlane/Fastfile
+            echo 'platform :android do' >> android/fastlane/Fastfile
+            echo '  desc "Build debug APK"' >> android/fastlane/Fastfile
+            echo '  lane :build_debug do' >> android/fastlane/Fastfile
+            echo '    gradle(' >> android/fastlane/Fastfile
+            echo '      task: "assembleDebug",' >> android/fastlane/Fastfile
+            echo '      project_dir: "."' >> android/fastlane/Fastfile
+            echo '    )' >> android/fastlane/Fastfile
+            echo '  end' >> android/fastlane/Fastfile
+            echo 'end' >> android/fastlane/Fastfile
           fi
           
           # Ensure ios directory exists
@@ -111,14 +107,12 @@ EOF
           
           # Always create/recreate iOS Gemfile to ensure it exists
           echo "Creating iOS Gemfile..."
-          cat > ios/Gemfile << EOF
-source "https://rubygems.org"
-
-gem "fastlane"
-
-plugins_path = File.join(File.dirname(__FILE__), 'fastlane', 'Pluginfile')
-eval_gemfile(plugins_path) if File.exist?(plugins_path)
-EOF
+          echo 'source "https://rubygems.org"' > ios/Gemfile
+          echo '' >> ios/Gemfile
+          echo 'gem "fastlane"' >> ios/Gemfile
+          echo '' >> ios/Gemfile
+          echo 'plugins_path = File.join(File.dirname(__FILE__), '\''fastlane'\'', '\''Pluginfile'\'')' >> ios/Gemfile
+          echo 'eval_gemfile(plugins_path) if File.exist?(plugins_path)' >> ios/Gemfile
           echo "iOS Gemfile created:"
           cat ios/Gemfile
           
@@ -129,20 +123,18 @@ EOF
           
           if [ ! -f "ios/fastlane/Fastfile" ]; then
             echo "Creating iOS Fastfile..."
-            cat > ios/fastlane/Fastfile << 'EOF'
-default_platform(:ios)
-
-platform :ios do
-  desc "Build debug version"
-  lane :build_debug do
-    build_app(
-      scheme: "CbM_mobile_app",
-      configuration: "Debug",
-      export_method: "development"
-    )
-  end
-end
-EOF
+            echo 'default_platform(:ios)' > ios/fastlane/Fastfile
+            echo '' >> ios/fastlane/Fastfile
+            echo 'platform :ios do' >> ios/fastlane/Fastfile
+            echo '  desc "Build debug version"' >> ios/fastlane/Fastfile
+            echo '  lane :build_debug do' >> ios/fastlane/Fastfile
+            echo '    build_app(' >> ios/fastlane/Fastfile
+            echo '      scheme: "CbM_mobile_app",' >> ios/fastlane/Fastfile
+            echo '      configuration: "Debug",' >> ios/fastlane/Fastfile
+            echo '      export_method: "development"' >> ios/fastlane/Fastfile
+            echo '    )' >> ios/fastlane/Fastfile
+            echo '  end' >> ios/fastlane/Fastfile
+            echo 'end' >> ios/fastlane/Fastfile
           fi
           
           echo "Final Fastlane setup verification:"
