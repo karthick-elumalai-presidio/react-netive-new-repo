@@ -161,8 +161,9 @@ EOF
       - name: Android Fastlane Build
         run: |
           cd android
-          echo "Installing Ruby gems..."
-          bundle install
+          echo "Checking Gemfile and Fastlane files:"
+          ls -la Gemfile
+          ls -la fastlane/
           echo "Running Fastlane build..."
           bundle exec fastlane build_debug
 
@@ -177,8 +178,9 @@ EOF
       - name: iOS Fastlane Build
         run: |
           cd ios
-          echo "Installing Ruby gems..."
-          bundle install
+          echo "Checking Gemfile and Fastlane files:"
+          ls -la Gemfile
+          ls -la fastlane/
           echo "Running Fastlane build..."
           bundle exec fastlane build_debug
 
