@@ -52,16 +52,106 @@ jobs:
             ls -la ios/
           fi
 
+      # Setup Fastlane after prebuild
+      - name: Setup Fastlane Configuration
+        run: |
+          echo "Setting up Fastlane configuration..."
+          
+          # Ensure android directory exists
+          if [ ! -d "android" ]; then
+            mkdir -p android
+          fi
+          
+          # Create Android Gemfile if it doesn't exist
+          if [ ! -f "android/Gemfile" ]; then
+            echo "Creating Android Gemfile..."
+            cat > android/Gemfile << EOF
+source "https://rubygems.org"
+
+gem "fastlane"
+
+plugins_path = File.join(File.dirname(__FILE__), 'fastlane', 'Pluginfile')
+eval_gemfile(plugins_path) if File.exist?(plugins_path)
+EOF
+          fi
+          
+          # Create Android Fastfile if it doesn't exist
+          if [ ! -d "android/fastlane" ]; then
+            mkdir -p android/fastlane
+          fi
+          
+          if [ ! -f "android/fastlane/Fastfile" ]; then
+            echo "Creating Android Fastfile..."
+            cat > android/fastlane/Fastfile << 'EOF'
+default_platform(:android)
+
+platform :android do
+  desc "Build debug APK"
+  lane :build_debug do
+    gradle(
+      task: "assembleDebug",
+      project_dir: "."
+    )
+  end
+end
+EOF
+          fi
+          
+          # Ensure ios directory exists
+          if [ ! -d "ios" ]; then
+            mkdir -p ios
+          fi
+          
+          # Create iOS Gemfile if it doesn't exist
+          if [ ! -f "ios/Gemfile" ]; then
+            echo "Creating iOS Gemfile..."
+            cat > ios/Gemfile << EOF
+source "https://rubygems.org"
+
+gem "fastlane"
+
+plugins_path = File.join(File.dirname(__FILE__), 'fastlane', 'Pluginfile')
+eval_gemfile(plugins_path) if File.exist?(plugins_path)
+EOF
+          fi
+          
+          # Create iOS Fastfile if it doesn't exist
+          if [ ! -d "ios/fastlane" ]; then
+            mkdir -p ios/fastlane
+          fi
+          
+          if [ ! -f "ios/fastlane/Fastfile" ]; then
+            echo "Creating iOS Fastfile..."
+            cat > ios/fastlane/Fastfile << 'EOF'
+default_platform(:ios)
+
+platform :ios do
+  desc "Build debug version"
+  lane :build_debug do
+    build_app(
+      scheme: "CbM_mobile_app",
+      configuration: "Debug",
+      export_method: "development"
+    )
+  end
+end
+EOF
+          fi
+          
+          echo "Final Fastlane setup:"
+          echo "Android:"
+          ls -la android/ || echo "No android directory"
+          echo "iOS:"
+          ls -la ios/ || echo "No ios directory"
+
       # Android Build Setup
       - name: Setup Java for Android
-        if: hashFiles('android/Gemfile') != ''
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Setup Ruby for Android
-        if: hashFiles('android/Gemfile') != ''
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.1'
@@ -69,7 +159,6 @@ jobs:
           working-directory: './android'
 
       - name: Android Fastlane Build
-        if: hashFiles('android/Gemfile') != ''
         run: |
           cd android
           echo "Installing Ruby gems..."
@@ -79,7 +168,6 @@ jobs:
 
       # iOS Build Setup
       - name: Setup Ruby for iOS
-        if: hashFiles('ios/Gemfile') != ''
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.1'
@@ -87,7 +175,6 @@ jobs:
           working-directory: './ios'
 
       - name: iOS Fastlane Build
-        if: hashFiles('ios/Gemfile') != ''
         run: |
           cd ios
           echo "Installing Ruby gems..."
@@ -97,7 +184,6 @@ jobs:
 
       # Upload Build Artifacts
       - name: Upload Android Artifacts
-        if: hashFiles('android/Gemfile') != ''
         uses: actions/upload-artifact@v4
         with:
           name: android-debug-build
@@ -105,7 +191,6 @@ jobs:
           retention-days: 7
 
       - name: Upload iOS Artifacts
-        if: hashFiles('ios/Gemfile') != ''
         uses: actions/upload-artifact@v4
         with:
           name: ios-debug-build
