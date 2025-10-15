@@ -3,7 +3,6 @@ name: Mobile App CI/CD
 on:
   push:
     branches:
-      - develop
       - main
       - qa
   workflow_dispatch:
