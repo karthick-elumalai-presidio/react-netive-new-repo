@@ -89,6 +89,13 @@ jobs:
           bundler-cache: true
           working-directory: './ios'
 
+      - name: Setup SSH for Match
+        if: inputs.platform == 'ios' || inputs.platform == 'all' || inputs.platform == null
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: |
+            ${{ secrets.MATCH_DEPLOY_KEY }}
+
       - name: iOS Build (Development)
         if: inputs.platform == 'ios' || inputs.platform == 'all' || inputs.platform == null
         env:
@@ -97,12 +104,17 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+        working-directory: ./ios
         run: |
-          cd ios
+          echo "pwd: $(pwd)"
+          ls -la
+          # Verify SSH access to Match repo
+
+          GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new" git ls-remote "$MATCH_GIT_URL" > /dev/null
           echo "Fastlane Fastfile preview (first 60 lines):"
-          nl -ba fastlane/Fastfile | sed -n '1,60p'
+          nl -ba fastlane/Fastfile | sed -n '1,60p' || true
           echo "-- End Fastfile preview --"
-          bundle install
+          bundle install || true
           bundle exec fastlane match_development
           bundle exec fastlane build_debug
 
@@ -232,8 +244,12 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+        working-directory: ./ios
         run: |
-          cd ios
+          echo "pwd: $(pwd)"
+          ls -la
+          # Verify SSH access to Match repo
+          GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new" git ls-remote "$MATCH_GIT_URL" > /dev/null
           bundle install
           bundle exec fastlane match_appstore
           bundle exec fastlane deploy_testflight
@@ -343,8 +359,12 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
+        working-directory: ./ios
         run: |
-          cd ios
+          echo "pwd: $(pwd)"
+          ls -la
+          # Verify SSH access to Match repo
+          GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new" git ls-remote "$MATCH_GIT_URL" > /dev/null
           bundle install
           bundle exec fastlane match_appstore
           bundle exec fastlane deploy_appstore
@@ -365,11 +385,11 @@ jobs:
         if: always()
         run: |
           if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Production build completed successfully!"
-            echo "📦 Build artifacts available for download"
-            echo "🌍 Environment: Production"
-            echo "🔗 Build URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo " Production build completed successfully!"
+            echo " Build artifacts available for download"
+            echo " Environment: Production"
+            echo " Build URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           else
-            echo "⚠️ Production build had issues"
-            echo "🔍 Check logs for more details"
+            echo " Production build had issues"
+            echo " Check logs for more details"
           fi
