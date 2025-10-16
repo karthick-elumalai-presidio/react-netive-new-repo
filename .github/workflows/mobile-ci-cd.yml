@@ -72,36 +72,7 @@ jobs:
         run: |
           bun run prebuild --clean
 
-      # Android Build
-      - name: Setup Java for Android
-        if: inputs.platform == 'android'
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Ruby for Android
-        if: inputs.platform == 'android'
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.1'
-          bundler-cache: true
-          working-directory: './android'
-
-      # - name: Android Build
-
-      #   run: |
-      #     cd android
-      #     bundle install
-      #     bundle exec fastlane build_debug
-
-      - name: Upload Android Artifacts
-        if: inputs.platform == 'android'
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-dev-build
-          path: android/app/build/outputs/apk/debug/*.apk
-          retention-days: 7
+      # iOS FIRST, Android AFTER iOS success (if requested)
 
       # iOS Build (Development)
       - name: Setup Ruby for iOS
@@ -135,6 +106,37 @@ jobs:
         with:
           name: ios-dev-build
           path: ios/build/
+          retention-days: 7
+
+      # Android Build (runs after iOS success)
+      - name: Setup Java for Android
+        if: success() && (inputs.platform == 'android' || inputs.platform == 'all')
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Ruby for Android
+        if: success() && (inputs.platform == 'android' || inputs.platform == 'all')
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+          bundler-cache: true
+          working-directory: './android'
+
+      - name: Android Build
+        if: success() && (inputs.platform == 'android' || inputs.platform == 'all')
+        run: |
+          cd android
+          bundle install
+          bundle exec fastlane build_debug
+
+      - name: Upload Android Artifacts
+        if: success() && (inputs.platform == 'android' || inputs.platform == 'all')
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-dev-build
+          path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 7
 
       # Notify Build Status

@@ -28,6 +28,17 @@ platform :ios do
 
   desc "Build debug version"
   lane :build_debug do
+    automatic_code_signing(
+      path: "CbMmobileapp.xcodeproj",
+      use_automatic_signing: true,
+      team_id: ENV['APPLE_TEAM_ID']
+    )
+
+    update_project_team(
+      path: "CbMmobileapp.xcodeproj",
+      teamid: ENV['APPLE_TEAM_ID']
+    )
+
     build_app(
       workspace: "CbMmobileapp.xcworkspace",
       scheme: "CbMmobileapp",
