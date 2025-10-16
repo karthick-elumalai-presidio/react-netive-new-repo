@@ -122,6 +122,9 @@ jobs:
           FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
         run: |
           cd ios
+          echo "Fastlane Fastfile preview (first 60 lines):"
+          nl -ba fastlane/Fastfile | sed -n '1,60p'
+          echo "-- End Fastfile preview --"
           bundle install
           bundle exec fastlane match_development
           bundle exec fastlane build_debug
