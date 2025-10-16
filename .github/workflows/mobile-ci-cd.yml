@@ -187,13 +187,13 @@ jobs:
         if: always()
         run: |
           if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Development build completed successfully!"
-            echo "📦 Build artifacts available for download"
-            echo "🌍 Environment: Development"
-            echo "🔗 Build URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo " Development build completed successfully!"
+            echo " Build artifacts available for download"
+            echo " Environment: Development"
+            echo " Build URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           else
-            echo "⚠️ Development build had issues"
-            echo "🔍 Check logs for more details"
+            echo " Development build had issues"
+            echo " Check logs for more details"
           fi
 
 # -------------------- QA -------------------- #
@@ -298,13 +298,13 @@ jobs:
         if: always()
         run: |
           if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ QA build completed successfully!"
-            echo "📦 Build artifacts available for download"
-            echo "🌍 Environment: QA"
-            echo "🔗 Build URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo " QA build completed successfully!"
+            echo " Build artifacts available for download"
+            echo " Environment: QA"
+            echo " Build URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           else
-            echo "⚠️ QA build had issues"
-            echo "🔍 Check logs for more details"
+            echo " QA build had issues"
+            echo " Check logs for more details"
           fi
 
 # -------------------- PRODUCTION -------------------- #
@@ -316,7 +316,7 @@ jobs:
     environment:
       name: qa
     steps:
-      - run: echo "✅ QA deployment approved."
+      - run: echo " QA deployment approved."
 
   approval-prod:
     name: Manual Approval (Production)
@@ -326,7 +326,7 @@ jobs:
     environment:
       name: production
     steps:
-      - run: echo "✅ Production deployment approved."
+      - run: echo " Production deployment approved."
 
   deploy-prod:
     name: Build & Deploy (Production)
