@@ -46,7 +46,7 @@ jobs:
   deploy-dev:
     name: Build & Deploy (Development)
     if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'development')
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -114,9 +114,16 @@ jobs:
 
       - name: iOS Build (Development)
         if: inputs.platform == 'ios' || inputs.platform == 'all' || inputs.platform == null
+        env:
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
         run: |
           cd ios
           bundle install
+          bundle exec fastlane match_development
           bundle exec fastlane build_debug
 
       - name: Upload iOS Artifacts

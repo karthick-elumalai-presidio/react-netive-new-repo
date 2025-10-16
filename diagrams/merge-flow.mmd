@@ -1,0 +1,75 @@
+flowchart TD
+    subgraph "Branch Protection Rules"
+        DEVELOP[develop branch]
+        QA[qa branch]
+        MAIN[main branch]
+        
+        DEVELOP --> |Requires PR| PR_DEV[PR to develop]
+        QA --> |Requires PR| PR_QA[PR to qa]
+        MAIN --> |Requires PR| PR_MAIN[PR to main]
+    end
+
+    subgraph "PR Validation Process"
+        PR_DEV --> VALIDATE[PR Validation Workflow]
+        PR_QA --> VALIDATE
+        PR_MAIN --> VALIDATE
+        
+        VALIDATE --> |Quality Checks| QC[Code Quality Checks]
+        QC --> LINT_CHECK[ESLint Validation]
+        QC --> FORMAT_CHECK[Prettier Format Check]
+        QC --> TS_CHECK[TypeScript Compilation]
+        QC --> TEST_RUN[Unit Tests with Coverage]
+        QC --> ANDROID_CHECK[Android Build Validation]
+        QC --> IOS_CHECK[iOS Build Validation]
+        
+        LINT_CHECK --> |Pass| FORMAT_CHECK
+        LINT_CHECK --> |Fail| REJECT[❌ Reject PR]
+        FORMAT_CHECK --> |Pass| TS_CHECK
+        FORMAT_CHECK --> |Fail| REJECT
+        TS_CHECK --> |Pass| TEST_RUN
+        TS_CHECK --> |Fail| REJECT
+        TEST_RUN --> |Pass| ANDROID_CHECK
+        TEST_RUN --> |Fail| REJECT
+        ANDROID_CHECK --> |Pass| IOS_CHECK
+        ANDROID_CHECK --> |Fail| REJECT
+        IOS_CHECK --> |Pass| APPROVE[✅ Approve for Merge]
+        IOS_CHECK --> |Fail| REJECT
+    end
+
+    subgraph "Merge Strategy"
+        APPROVE --> |Auto-merge if enabled| AUTO_MERGE[Automatic Merge]
+        APPROVE --> |Manual merge| MANUAL_MERGE[Manual Merge by Developer]
+        
+        AUTO_MERGE --> TRIGGER_CI[Trigger CI/CD Pipeline]
+        MANUAL_MERGE --> TRIGGER_CI
+    end
+
+    subgraph "Environment Deployment"
+        TRIGGER_CI --> |develop branch| DEV_DEPLOY[Development Deployment]
+        TRIGGER_CI --> |qa branch| QA_DEPLOY[QA Deployment]
+        TRIGGER_CI --> |main branch| PROD_DEPLOY[Production Deployment]
+        
+        DEV_DEPLOY --> DEV_BUILD[Build Debug APK/IPA]
+        QA_DEPLOY --> QA_BUILD[Build Release & Deploy Beta]
+        PROD_DEPLOY --> PROD_BUILD[Build Release & Deploy Production]
+        
+        DEV_BUILD --> DEV_ARTIFACTS[Upload Development Artifacts]
+        QA_BUILD --> QA_STORES[Deploy to TestFlight & Play Store Beta]
+        PROD_BUILD --> PROD_STORES[Deploy to App Store & Play Store]
+    end
+
+    subgraph "Manual Workflow Dispatch"
+        MANUAL[Manual Trigger] --> ENV_SELECT[Select Environment]
+        ENV_SELECT --> |development| DEV_DEPLOY
+        ENV_SELECT --> |qa| QA_DEPLOY
+        ENV_SELECT --> |production| PROD_DEPLOY
+        
+        MANUAL --> PLATFORM_SELECT[Select Platform]
+        PLATFORM_SELECT --> |ios| IOS_ONLY[iOS Only Build]
+        PLATFORM_SELECT --> |android| ANDROID_ONLY[Android Only Build]
+        PLATFORM_SELECT --> |all| ALL_PLATFORMS[All Platforms Build]
+    end
+
+    REJECT --> FEEDBACK[PR Comment with Results]
+    FEEDBACK --> FIX[Developer Fixes Issues]
+    FIX --> PR_DEV

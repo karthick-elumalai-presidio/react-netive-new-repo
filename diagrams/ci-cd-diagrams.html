@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CI/CD Architecture Diagrams</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #007acc;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #007acc;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007acc;
+            padding-left: 15px;
+        }
+        .diagram-container {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .mermaid {
+            text-align: center;
+        }
+        .description {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f4fd;
+            border-radius: 5px;
+            border-left: 4px solid #007acc;
+        }
+        .download-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .download-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px;
+            background: #007acc;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .download-btn:hover {
+            background: #005a9e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CI/CD Architecture Diagrams</h1>
+        
+        <div class="description">
+            <h3>Overview</h3>
+            <p>This document contains the high-level architecture and merge flow diagrams for the React Native mobile application CI/CD pipeline. The diagrams show the complete workflow from development to production deployment.</p>
+        </div>
+
+        <h2>1. High-Level Architecture Diagram</h2>
+        <div class="diagram-container">
+            <div class="mermaid">
+graph TB
+    subgraph "Development Workflow"
+        DEV[Developer] --> PR[Pull Request]
+        PR --> PR_VAL[PR Validation Workflow]
+        PR_VAL --> |Pass| MERGE[Merge to Branch]
+        PR_VAL --> |Fail| FIX[Fix Issues]
+        FIX --> PR
+    end
+
+    subgraph "Branch Strategy"
+        MERGE --> |to develop| DEV_BRANCH[develop branch]
+        MERGE --> |to qa| QA_BRANCH[qa branch] 
+        MERGE --> |to main| MAIN_BRANCH[main branch]
+    end
+
+    subgraph "CI/CD Pipeline"
+        DEV_BRANCH --> CI_DEV[Development Build]
+        QA_BRANCH --> CI_QA[QA Build & Deploy]
+        MAIN_BRANCH --> CI_PROD[Production Build & Deploy]
+        
+        subgraph "Development Environment"
+            CI_DEV --> DEV_ANDROID[Android Debug Build]
+            CI_DEV --> DEV_IOS[iOS Debug Build]
+            DEV_ANDROID --> DEV_ARTIFACTS[Development Artifacts]
+            DEV_IOS --> DEV_ARTIFACTS
+        end
+        
+        subgraph "QA Environment"
+            CI_QA --> QA_ANDROID[Android Release Build]
+            CI_QA --> QA_IOS[iOS Release Build]
+            QA_ANDROID --> QA_ANDROID_DEPLOY[Deploy to Play Store Beta]
+            QA_IOS --> QA_IOS_DEPLOY[Deploy to TestFlight]
+        end
+        
+        subgraph "Production Environment"
+            CI_PROD --> PROD_ANDROID[Android Production Build]
+            CI_PROD --> PROD_IOS[iOS Production Build]
+            PROD_ANDROID --> PROD_ANDROID_DEPLOY[Deploy to Play Store]
+            PROD_IOS --> PROD_IOS_DEPLOY[Deploy to App Store]
+        end
+    end
+
+    subgraph "External Services"
+        PLAY_STORE[Google Play Store]
+        APP_STORE[Apple App Store]
+        TESTFLIGHT[TestFlight]
+        CODECOV[Codecov]
+        
+        QA_ANDROID_DEPLOY --> PLAY_STORE
+        PROD_ANDROID_DEPLOY --> PLAY_STORE
+        QA_IOS_DEPLOY --> TESTFLIGHT
+        PROD_IOS_DEPLOY --> APP_STORE
+    end
+
+    subgraph "Quality Gates"
+        PR_VAL --> LINT[ESLint]
+        PR_VAL --> FORMAT[Prettier]
+        PR_VAL --> TYPESCRIPT[TypeScript Check]
+        PR_VAL --> TESTS[Unit Tests]
+        PR_VAL --> COVERAGE[Code Coverage]
+        PR_VAL --> ANDROID_BUILD[Android Build Check]
+        PR_VAL --> IOS_BUILD[iOS Build Check]
+        
+        COVERAGE --> CODECOV
+    end
+
+    subgraph "Build Tools & Technologies"
+        BUN[Bun Runtime]
+        NODE[Node.js 18]
+        JAVA[Java 17]
+        RUBY[Ruby 3.1]
+        FASTLANE[Fastlane]
+        EXPO[Expo]
+        
+        CI_DEV --> BUN
+        CI_QA --> BUN
+        CI_PROD --> BUN
+        CI_DEV --> NODE
+        CI_QA --> NODE
+        CI_PROD --> NODE
+        CI_DEV --> JAVA
+        CI_QA --> JAVA
+        CI_PROD --> JAVA
+        CI_DEV --> RUBY
+        CI_QA --> RUBY
+        CI_PROD --> RUBY
+        CI_DEV --> FASTLANE
+        CI_QA --> FASTLANE
+        CI_PROD --> FASTLANE
+    end
+            </div>
+            <div class="description">
+                <h4>Architecture Components:</h4>
+                <ul>
+                    <li><strong>Development Workflow:</strong> Shows the PR-based development process with validation gates</li>
+                    <li><strong>Branch Strategy:</strong> Three-environment deployment strategy (develop, qa, main)</li>
+                    <li><strong>CI/CD Pipeline:</strong> Automated builds and deployments for each environment</li>
+                    <li><strong>Quality Gates:</strong> Automated quality checks before merge</li>
+                    <li><strong>Build Tools:</strong> Technology stack used for building and deployment</li>
+                    <li><strong>External Services:</strong> Integration with app stores and monitoring services</li>
+                </ul>
+            </div>
+        </div>
+
+        <h2>2. Merge Flow Diagram</h2>
+        <div class="diagram-container">
+            <div class="mermaid">
+flowchart TD
+    subgraph "Branch Protection Rules"
+        DEVELOP[develop branch]
+        QA[qa branch]
+        MAIN[main branch]
+        
+        DEVELOP --> |Requires PR| PR_DEV[PR to develop]
+        QA --> |Requires PR| PR_QA[PR to qa]
+        MAIN --> |Requires PR| PR_MAIN[PR to main]
+    end
+
+    subgraph "PR Validation Process"
+        PR_DEV --> VALIDATE[PR Validation Workflow]
+        PR_QA --> VALIDATE
+        PR_MAIN --> VALIDATE
+        
+        VALIDATE --> |Quality Checks| QC[Code Quality Checks]
+        QC --> LINT_CHECK[ESLint Validation]
+        QC --> FORMAT_CHECK[Prettier Format Check]
+        QC --> TS_CHECK[TypeScript Compilation]
+        QC --> TEST_RUN[Unit Tests with Coverage]
+        QC --> ANDROID_CHECK[Android Build Validation]
+        QC --> IOS_CHECK[iOS Build Validation]
+        
+        LINT_CHECK --> |Pass| FORMAT_CHECK
+        LINT_CHECK --> |Fail| REJECT[❌ Reject PR]
+        FORMAT_CHECK --> |Pass| TS_CHECK
+        FORMAT_CHECK --> |Fail| REJECT
+        TS_CHECK --> |Pass| TEST_RUN
+        TS_CHECK --> |Fail| REJECT
+        TEST_RUN --> |Pass| ANDROID_CHECK
+        TEST_RUN --> |Fail| REJECT
+        ANDROID_CHECK --> |Pass| IOS_CHECK
+        ANDROID_CHECK --> |Fail| REJECT
+        IOS_CHECK --> |Pass| APPROVE[✅ Approve for Merge]
+        IOS_CHECK --> |Fail| REJECT
+    end
+
+    subgraph "Merge Strategy"
+        APPROVE --> |Auto-merge if enabled| AUTO_MERGE[Automatic Merge]
+        APPROVE --> |Manual merge| MANUAL_MERGE[Manual Merge by Developer]
+        
+        AUTO_MERGE --> TRIGGER_CI[Trigger CI/CD Pipeline]
+        MANUAL_MERGE --> TRIGGER_CI
+    end
+
+    subgraph "Environment Deployment"
+        TRIGGER_CI --> |develop branch| DEV_DEPLOY[Development Deployment]
+        TRIGGER_CI --> |qa branch| QA_DEPLOY[QA Deployment]
+        TRIGGER_CI --> |main branch| PROD_DEPLOY[Production Deployment]
+        
+        DEV_DEPLOY --> DEV_BUILD[Build Debug APK/IPA]
+        QA_DEPLOY --> QA_BUILD[Build Release & Deploy Beta]
+        PROD_DEPLOY --> PROD_BUILD[Build Release & Deploy Production]
+        
+        DEV_BUILD --> DEV_ARTIFACTS[Upload Development Artifacts]
+        QA_BUILD --> QA_STORES[Deploy to TestFlight & Play Store Beta]
+        PROD_BUILD --> PROD_STORES[Deploy to App Store & Play Store]
+    end
+
+    subgraph "Manual Workflow Dispatch"
+        MANUAL[Manual Trigger] --> ENV_SELECT[Select Environment]
+        ENV_SELECT --> |development| DEV_DEPLOY
+        ENV_SELECT --> |qa| QA_DEPLOY
+        ENV_SELECT --> |production| PROD_DEPLOY
+        
+        MANUAL --> PLATFORM_SELECT[Select Platform]
+        PLATFORM_SELECT --> |ios| IOS_ONLY[iOS Only Build]
+        PLATFORM_SELECT --> |android| ANDROID_ONLY[Android Only Build]
+        PLATFORM_SELECT --> |all| ALL_PLATFORMS[All Platforms Build]
+    end
+
+    REJECT --> FEEDBACK[PR Comment with Results]
+    FEEDBACK --> FIX[Developer Fixes Issues]
+    FIX --> PR_DEV
+            </div>
+            <div class="description">
+                <h4>Merge Flow Components:</h4>
+                <ul>
+                    <li><strong>Branch Protection:</strong> PR requirements for all main branches</li>
+                    <li><strong>Validation Process:</strong> Sequential quality checks that must all pass</li>
+                    <li><strong>Merge Strategy:</strong> Support for both automatic and manual merges</li>
+                    <li><strong>Environment Deployment:</strong> Branch-based deployment to appropriate environments</li>
+                    <li><strong>Manual Dispatch:</strong> On-demand workflow triggers with environment/platform selection</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="download-section">
+            <h3>Download Options</h3>
+            <p>You can use these diagrams in various formats:</p>
+            <a href="high-level-architecture.mmd" class="download-btn" download>Download Architecture Mermaid</a>
+            <a href="merge-flow.mmd" class="download-btn" download>Download Merge Flow Mermaid</a>
+            <p style="margin-top: 15px; font-size: 0.9em; color: #666;">
+                To convert to PNG/SVG: Use <a href="https://mermaid.live" target="_blank">Mermaid Live Editor</a> or install <code>@mermaid-js/mermaid-cli</code>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            },
+            themeVariables: {
+                primaryColor: '#007acc',
+                primaryTextColor: '#333',
+                primaryBorderColor: '#007acc',
+                lineColor: '#666',
+                secondaryColor: '#f8f9fa',
+                tertiaryColor: '#e8f4fd'
+            }
+        });
+    </script>
+</body>
+</html>

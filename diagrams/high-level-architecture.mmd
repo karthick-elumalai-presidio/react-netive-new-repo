@@ -1,0 +1,90 @@
+graph TB
+    subgraph "Development Workflow"
+        DEV[Developer] --> PR[Pull Request]
+        PR --> PR_VAL[PR Validation Workflow]
+        PR_VAL --> |Pass| MERGE[Merge to Branch]
+        PR_VAL --> |Fail| FIX[Fix Issues]
+        FIX --> PR
+    end
+
+    subgraph "Branch Strategy"
+        MERGE --> |to develop| DEV_BRANCH[develop branch]
+        MERGE --> |to qa| QA_BRANCH[qa branch] 
+        MERGE --> |to main| MAIN_BRANCH[main branch]
+    end
+
+    subgraph "CI/CD Pipeline"
+        DEV_BRANCH --> CI_DEV[Development Build]
+        QA_BRANCH --> CI_QA[QA Build & Deploy]
+        MAIN_BRANCH --> CI_PROD[Production Build & Deploy]
+        
+        subgraph "Development Environment"
+            CI_DEV --> DEV_ANDROID[Android Debug Build]
+            CI_DEV --> DEV_IOS[iOS Debug Build]
+            DEV_ANDROID --> DEV_ARTIFACTS[Development Artifacts]
+            DEV_IOS --> DEV_ARTIFACTS
+        end
+        
+        subgraph "QA Environment"
+            CI_QA --> QA_ANDROID[Android Release Build]
+            CI_QA --> QA_IOS[iOS Release Build]
+            QA_ANDROID --> QA_ANDROID_DEPLOY[Deploy to Play Store Beta]
+            QA_IOS --> QA_IOS_DEPLOY[Deploy to TestFlight]
+        end
+        
+        subgraph "Production Environment"
+            CI_PROD --> PROD_ANDROID[Android Production Build]
+            CI_PROD --> PROD_IOS[iOS Production Build]
+            PROD_ANDROID --> PROD_ANDROID_DEPLOY[Deploy to Play Store]
+            PROD_IOS --> PROD_IOS_DEPLOY[Deploy to App Store]
+        end
+    end
+
+    subgraph "External Services"
+        PLAY_STORE[Google Play Store]
+        APP_STORE[Apple App Store]
+        TESTFLIGHT[TestFlight]
+        CODECOV[Codecov]
+        
+        QA_ANDROID_DEPLOY --> PLAY_STORE
+        PROD_ANDROID_DEPLOY --> PLAY_STORE
+        QA_IOS_DEPLOY --> TESTFLIGHT
+        PROD_IOS_DEPLOY --> APP_STORE
+    end
+
+    subgraph "Quality Gates"
+        PR_VAL --> LINT[ESLint]
+        PR_VAL --> FORMAT[Prettier]
+        PR_VAL --> TYPESCRIPT[TypeScript Check]
+        PR_VAL --> TESTS[Unit Tests]
+        PR_VAL --> COVERAGE[Code Coverage]
+        PR_VAL --> ANDROID_BUILD[Android Build Check]
+        PR_VAL --> IOS_BUILD[iOS Build Check]
+        
+        COVERAGE --> CODECOV
+    end
+
+    subgraph "Build Tools & Technologies"
+        BUN[Bun Runtime]
+        NODE[Node.js 18]
+        JAVA[Java 17]
+        RUBY[Ruby 3.1]
+        FASTLANE[Fastlane]
+        EXPO[Expo]
+        
+        CI_DEV --> BUN
+        CI_QA --> BUN
+        CI_PROD --> BUN
+        CI_DEV --> NODE
+        CI_QA --> NODE
+        CI_PROD --> NODE
+        CI_DEV --> JAVA
+        CI_QA --> JAVA
+        CI_PROD --> JAVA
+        CI_DEV --> RUBY
+        CI_QA --> RUBY
+        CI_PROD --> RUBY
+        CI_DEV --> FASTLANE
+        CI_QA --> FASTLANE
+        CI_PROD --> FASTLANE
+    end

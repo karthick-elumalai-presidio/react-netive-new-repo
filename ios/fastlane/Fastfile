@@ -16,15 +16,20 @@
 default_platform(:ios)
 
 platform :ios do
-  desc "Match certificates and provisioning profiles"
+  desc "Match certificates and provisioning profiles for App Store"
   lane :match_appstore do
     match(type: "appstore", readonly: true)
+  end
+
+  desc "Match certificates and provisioning profiles for development"
+  lane :match_development do
+    match(type: "development", readonly: true)
   end
 
   desc "Build debug version"
   lane :build_debug do
     build_app(
-      scheme: "CbM_mobile_app",
+      scheme: "CbMmobileapp",
       configuration: "Debug",
       export_method: "development"
     )
@@ -35,7 +40,7 @@ platform :ios do
     match(type: "appstore", readonly: true)
     
     build_app(
-      scheme: "CbM_mobile_app",
+      scheme: "CbMmobileapp",
       configuration: "Release",
       export_method: "app-store"
     )
@@ -50,7 +55,7 @@ platform :ios do
     match(type: "appstore", readonly: true)
     
     build_app(
-      scheme: "CbM_mobile_app",
+      scheme: "CbMmobileapp",
       configuration: "Release",
       export_method: "app-store"
     )
