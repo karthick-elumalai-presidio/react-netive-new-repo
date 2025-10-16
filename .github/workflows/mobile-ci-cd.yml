@@ -74,14 +74,14 @@ jobs:
 
       # Android Build
       - name: Setup Java for Android
-        if: inputs.platform == 'android' || inputs.platform == 'all' || inputs.platform == null
+        if: inputs.platform == 'android'
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: Setup Ruby for Android
-        if: inputs.platform == 'android' || inputs.platform == 'all' || inputs.platform == null
+        if: inputs.platform == 'android'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.1'
@@ -96,7 +96,7 @@ jobs:
       #     bundle exec fastlane build_debug
 
       - name: Upload Android Artifacts
-        if: inputs.platform == 'android' || inputs.platform == 'all' || inputs.platform == null
+        if: inputs.platform == 'android'
         uses: actions/upload-artifact@v4
         with:
           name: android-dev-build

@@ -32,7 +32,16 @@ platform :ios do
       workspace: "CbMmobileapp.xcworkspace",
       scheme: "CbMmobileapp",
       configuration: "Debug",
-      export_method: "development"
+      export_method: "development",
+      export_options: {
+        signingStyle: "automatic",
+        provisioningProfiles: {
+          "com.anonymous.CbM-mobile-app" => ""
+        },
+        compileBitcode: false
+      },
+      team_id: ENV['APPLE_TEAM_ID'],
+      automatic_code_signing: true
     )
   end
 
