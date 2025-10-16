@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main 
+      - develop
       - qa
   workflow_dispatch:
     inputs:
