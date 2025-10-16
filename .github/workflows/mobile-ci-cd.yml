@@ -88,12 +88,12 @@ jobs:
           bundler-cache: true
           working-directory: './android'
 
-      - name: Android Build
-        if: inputs.platform == 'android' || inputs.platform == 'all' || inputs.platform == null
-        run: |
-          cd android
-          bundle install
-          bundle exec fastlane build_debug
+      # - name: Android Build
+
+      #   run: |
+      #     cd android
+      #     bundle install
+      #     bundle exec fastlane build_debug
 
       - name: Upload Android Artifacts
         if: inputs.platform == 'android' || inputs.platform == 'all' || inputs.platform == null
