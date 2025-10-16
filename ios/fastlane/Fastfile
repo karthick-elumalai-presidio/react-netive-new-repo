@@ -29,6 +29,7 @@ platform :ios do
   desc "Build debug version"
   lane :build_debug do
     build_app(
+      workspace: "CbMmobileapp.xcworkspace",
       scheme: "CbMmobileapp",
       configuration: "Debug",
       export_method: "development"
@@ -40,6 +41,7 @@ platform :ios do
     match(type: "appstore", readonly: true)
     
     build_app(
+      workspace: "CbMmobileapp.xcworkspace",
       scheme: "CbMmobileapp",
       configuration: "Release",
       export_method: "app-store"
@@ -55,6 +57,7 @@ platform :ios do
     match(type: "appstore", readonly: true)
     
     build_app(
+      workspace: "CbMmobileapp.xcworkspace",
       scheme: "CbMmobileapp",
       configuration: "Release",
       export_method: "app-store"
