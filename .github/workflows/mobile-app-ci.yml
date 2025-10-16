@@ -3,7 +3,7 @@ name: Mobile App CI (PR Validation)
 on:
   pull_request:
     branches: [ develop, main ]
-  workflow_dispatch:
+  workflow_dispatch: 
 
 env:
   NODE_VERSION: 18
