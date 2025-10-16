@@ -1,15 +1,16 @@
-name: Mobile App CI
+name: Mobile App CI (PR Validation)
 
 on:
-  push:
-    branches: [ develop ]
   pull_request:
-    branches: [ develop ]
+    branches: [ develop, main ]
   workflow_dispatch:
 
+env:
+  NODE_VERSION: 18
+
 jobs:
-  build:
-    name: Build & Lint (Develop)
+  pr-validate:
+    name: PR Validate (iOS-first)
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -52,130 +53,9 @@ jobs:
             ls -la ios/
           fi
 
-      # Setup Fastlane after prebuild
-      - name: Setup Fastlane Configuration
-        run: |
-          echo "Setting up Fastlane configuration..."
-          echo "Current directory: $(pwd)"
-          echo "Contents before setup:"
-          ls -la
-          echo "Android directory status:"
-          ls -la android/ || echo "Android directory does not exist"
-          
-          # Ensure android directory exists
-          if [ ! -d "android" ]; then
-            echo "Creating android directory..."
-            mkdir -p android
-          fi
-          
-          # Always create/recreate Android Gemfile to ensure it exists
-          echo "Creating Android Gemfile..."
-          echo 'source "https://rubygems.org"' > android/Gemfile
-          echo '' >> android/Gemfile
-          echo 'gem "fastlane"' >> android/Gemfile
-          echo '' >> android/Gemfile
-          echo 'plugins_path = File.join(File.dirname(__FILE__), '\''fastlane'\'', '\''Pluginfile'\'')' >> android/Gemfile
-          echo 'eval_gemfile(plugins_path) if File.exist?(plugins_path)' >> android/Gemfile
-          echo "Android Gemfile created:"
-          cat android/Gemfile
-          
-          # Create Android Fastfile if it doesn't exist
-          if [ ! -d "android/fastlane" ]; then
-            mkdir -p android/fastlane
-          fi
-          
-          if [ ! -f "android/fastlane/Fastfile" ]; then
-            echo "Creating Android Fastfile..."
-            echo 'default_platform(:android)' > android/fastlane/Fastfile
-            echo '' >> android/fastlane/Fastfile
-            echo 'platform :android do' >> android/fastlane/Fastfile
-            echo '  desc "Build debug APK"' >> android/fastlane/Fastfile
-            echo '  lane :build_debug do' >> android/fastlane/Fastfile
-            echo '    gradle(' >> android/fastlane/Fastfile
-            echo '      task: "assembleDebug",' >> android/fastlane/Fastfile
-            echo '      project_dir: "."' >> android/fastlane/Fastfile
-            echo '    )' >> android/fastlane/Fastfile
-            echo '  end' >> android/fastlane/Fastfile
-            echo 'end' >> android/fastlane/Fastfile
-          fi
-          
-          # Ensure ios directory exists
-          if [ ! -d "ios" ]; then
-            echo "Creating ios directory..."
-            mkdir -p ios
-          fi
-          
-          # Always create/recreate iOS Gemfile to ensure it exists
-          echo "Creating iOS Gemfile..."
-          echo 'source "https://rubygems.org"' > ios/Gemfile
-          echo '' >> ios/Gemfile
-          echo 'gem "fastlane"' >> ios/Gemfile
-          echo '' >> ios/Gemfile
-          echo 'plugins_path = File.join(File.dirname(__FILE__), '\''fastlane'\'', '\''Pluginfile'\'')' >> ios/Gemfile
-          echo 'eval_gemfile(plugins_path) if File.exist?(plugins_path)' >> ios/Gemfile
-          echo "iOS Gemfile created:"
-          cat ios/Gemfile
-          
-          # Create iOS Fastfile if it doesn't exist
-          if [ ! -d "ios/fastlane" ]; then
-            mkdir -p ios/fastlane
-          fi
-          
-          if [ ! -f "ios/fastlane/Fastfile" ]; then
-            echo "Creating iOS Fastfile..."
-            echo 'default_platform(:ios)' > ios/fastlane/Fastfile
-            echo '' >> ios/fastlane/Fastfile
-            echo 'platform :ios do' >> ios/fastlane/Fastfile
-            echo '  desc "Build debug version"' >> ios/fastlane/Fastfile
-            echo '  lane :build_debug do' >> ios/fastlane/Fastfile
-            echo '    build_app(' >> ios/fastlane/Fastfile
-            echo '      scheme: "CbM_mobile_app",' >> ios/fastlane/Fastfile
-            echo '      configuration: "Debug",' >> ios/fastlane/Fastfile
-            echo '      export_method: "development"' >> ios/fastlane/Fastfile
-            echo '    )' >> ios/fastlane/Fastfile
-            echo '  end' >> ios/fastlane/Fastfile
-            echo 'end' >> ios/fastlane/Fastfile
-          fi
-          
-          echo "Final Fastlane setup verification:"
-          echo "Android directory contents:"
-          ls -la android/ || echo "No android directory"
-          echo "Android Gemfile contents:"
-          cat android/Gemfile || echo "No Android Gemfile"
-          echo "Android fastlane directory:"
-          ls -la android/fastlane/ || echo "No android fastlane directory"
-          
-          echo "iOS directory contents:"
-          ls -la ios/ || echo "No ios directory"
-          echo "iOS Gemfile contents:"
-          cat ios/Gemfile || echo "No iOS Gemfile"
-          echo "iOS fastlane directory:"
-          ls -la ios/fastlane/ || echo "No ios fastlane directory"
+      # No file generation in CI; repo already contains Fastlane files
 
-      # Android Build Setup
-      - name: Setup Java for Android
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Ruby for Android
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.1'
-          bundler-cache: true
-          working-directory: './android'
-
-      - name: Android Fastlane Build
-        run: |
-          cd android
-          echo "Checking Gemfile and Fastlane files:"
-          ls -la Gemfile
-          ls -la fastlane/
-          echo "Running Fastlane build..."
-          bundle exec fastlane build_debug
-
-      # iOS Build Setup
+      # iOS Build Setup (first)
       - name: Setup Ruby for iOS
         uses: ruby/setup-ruby@v1
         with:
@@ -184,27 +64,55 @@ jobs:
           working-directory: './ios'
 
       - name: iOS Fastlane Build
+        env:
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
         run: |
           cd ios
-          echo "Checking Gemfile and Fastlane files:"
-          ls -la Gemfile
-          ls -la fastlane/
-          echo "Running Fastlane build..."
+          bundle install
+          bundle exec fastlane match_development
           bundle exec fastlane build_debug
 
       # Upload Build Artifacts
-      - name: Upload Android Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-debug-build
-          path: android/app/build/outputs/apk/debug/*.apk
-          retention-days: 7
-
       - name: Upload iOS Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ios-debug-build
           path: ios/build/
+          retention-days: 7
+
+      # Optional Android (only if we decide to build on PRs)
+      - name: Setup Java for Android
+        if: success() && false  # flip to true to enable Android on PRs
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Ruby for Android
+        if: success() && false
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.1'
+          bundler-cache: true
+          working-directory: './android'
+
+      - name: Android Fastlane Build
+        if: success() && false
+        run: |
+          cd android
+          bundle install
+          bundle exec fastlane build_debug
+
+      - name: Upload Android Artifacts
+        if: success() && false
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-build
+          path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 7
 
       - name: Build Success Notification
