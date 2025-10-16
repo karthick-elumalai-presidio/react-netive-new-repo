@@ -93,4 +93,63 @@ platform :ios do
       skip_screenshots: true
     )
   end
+
+  # Builds a development-signed IPA and stores it at ios/build/ios/dev.ipa
+  desc "Build development IPA artifact"
+  lane :build_dev_ipa do
+    match(type: "development", readonly: true)
+
+    build_app(
+      workspace: "CbMmobileapp.xcworkspace",
+      scheme: "CbMmobileapp",
+      configuration: "Debug",
+      export_method: "development",
+      output_directory: "build/ios",
+      output_name: "dev.ipa",
+      team_id: ENV['APPLE_TEAM_ID'],
+      xcargs: "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Automatic"
+    )
+  end
+
+  # Uploads a previously built IPA to TestFlight without rebuilding
+  # Usage: bundle exec fastlane upload_testflight_ipa ipa:path/to/file.ipa
+  desc "Upload an existing IPA to TestFlight"
+  lane :upload_testflight_ipa do |options|
+    ipa_path = options[:ipa]
+    UI.user_error!("Please provide ipa: path/to/file.ipa") if ipa_path.to_s.strip.empty?
+
+    upload_to_testflight(
+      ipa: ipa_path,
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  # Builds an App Store signed IPA and stores it at ios/build/ios/release.ipa
+  desc "Build App Store (Release) IPA artifact"
+  lane :build_appstore_ipa do
+    match(type: "appstore", readonly: true)
+
+    build_app(
+      workspace: "CbMmobileapp.xcworkspace",
+      scheme: "CbMmobileapp",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "build/ios",
+      output_name: "release.ipa"
+    )
+  end
+
+  # Uploads an existing IPA directly to App Store (no rebuild)
+  desc "Upload an existing IPA to App Store"
+  lane :upload_appstore_ipa do |options|
+    ipa_path = options[:ipa]
+    UI.user_error!("Please provide ipa: path/to/file.ipa") if ipa_path.to_s.strip.empty?
+
+    upload_to_app_store(
+      ipa: ipa_path,
+      force: true,
+      skip_metadata: true,
+      skip_screenshots: true
+    )
+  end
 end

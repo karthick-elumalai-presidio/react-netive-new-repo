@@ -33,7 +33,7 @@ permissions:
   actions: read
 
 env:
-  NODE_VERSION: 18
+  NODE_VERSION: lts/*
   APPLE_ID: ${{ secrets.APPLE_ID }}
   APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
   MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
