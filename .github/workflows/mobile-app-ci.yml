@@ -3,7 +3,7 @@ name: Mobile App CI (PR Validation)
 on:
   pull_request:
     branches: [ develop, main ]
-  workflow_dispatch: 
+  workflow_dispatch:
 
 env:
   NODE_VERSION: 18
@@ -16,7 +16,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Use Bun for dependency installation to avoid npm/yarn lockfile cache requirement
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
@@ -30,32 +29,22 @@ jobs:
           echo "Node: $(node -v)"
           echo "Bun: $(bun -v)"
           echo "Branch: ${{ github.ref_name }}"
-          echo "Current directory contents:"
           ls -la
 
       - name: Lint
         run: |
           bun run lint || true
 
-      # Prebuild for Expo
       - name: Prebuild Project
         run: |
-          echo "Running expo prebuild for native projects"
-          bun run prebuild --clean
-          echo "Checking created directories:"
+          if [ ! -d "ios" ] || [ ! -d "android" ]; then
+            echo "Native folders missing; running prebuild"
+            bun run prebuild
+          else
+            echo "Native folders present; skipping prebuild"
+          fi
           ls -la
-          if [ -d "android" ]; then
-            echo "Android directory created:"
-            ls -la android/
-          fi
-          if [ -d "ios" ]; then
-            echo "iOS directory created:"
-            ls -la ios/
-          fi
 
-      # No file generation in CI; repo already contains Fastlane files
-
-      # iOS Build Setup (first)
       - name: Setup Ruby for iOS
         uses: ruby/setup-ruby@v1
         with:
@@ -72,57 +61,13 @@ jobs:
           FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
         run: |
           cd ios
-          bundle install
+          bundle install || true
           bundle exec fastlane match_development
           bundle exec fastlane build_debug
 
-      # Upload Build Artifacts
       - name: Upload iOS Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ios-debug-build
           path: ios/build/
           retention-days: 7
-
-      # Optional Android (only if we decide to build on PRs)
-      - name: Setup Java for Android
-        if: success() && false  # flip to true to enable Android on PRs
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Ruby for Android
-        if: success() && false
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.1'
-          bundler-cache: true
-          working-directory: './android'
-
-      - name: Android Fastlane Build
-        if: success() && false
-        run: |
-          cd android
-          bundle install
-          bundle exec fastlane build_debug
-
-      - name: Upload Android Artifacts
-        if: success() && false
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-debug-build
-          path: android/app/build/outputs/apk/debug/*.apk
-          retention-days: 7
-
-      - name: Build Success Notification
-        if: always()
-        run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "✅ Development build completed successfully!"
-            echo "📦 Build artifacts available for download"
-            echo "🔗 Build URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          else
-            echo "⚠️ Development build had issues"
-            echo "🔍 Check logs for more details"
-          fi

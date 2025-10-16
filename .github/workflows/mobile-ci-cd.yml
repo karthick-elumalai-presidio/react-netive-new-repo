@@ -68,10 +68,15 @@ jobs:
           echo "Environment: Development"
           echo "Platform: ${{ inputs.platform || 'all' }}"
 
-      # Prebuild for Expo
+      # Prebuild for Expo (only if native dirs missing; avoid deleting Fastlane files)
       - name: Prebuild Project
         run: |
-          bun run prebuild --clean
+          if [ ! -d "ios" ] || [ ! -d "android" ]; then
+            echo "Native folders missing; running prebuild"
+            bun run prebuild
+          else
+            echo "Native folders present; skipping prebuild"
+          fi
 
       # iOS FIRST, Android AFTER iOS success (if requested)
 
