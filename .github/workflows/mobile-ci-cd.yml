@@ -65,6 +65,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: ''
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Expo prebuild (generate native folders if missing)
+        run: |
+          if [ ! -f "android/gradlew" ]; then
+            echo "android/gradlew not found -> running expo prebuild"
+            bun run prebuild -- --non-interactive
+          else
+            echo "Gradle wrapper present; skipping prebuild"
+          fi
+
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -110,9 +133,34 @@ jobs:
     name: Build iOS Artifact
     runs-on: macos-14
     needs: validate
+    env:
+      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && secrets.MATCH_GIT_URL != '' && secrets.MATCH_PASSWORD != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: ''
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Expo prebuild (ensure iOS workspace exists)
+        run: |
+          if [ ! -d "ios" ] || [ ! -e "ios/CbMmobileapp.xcworkspace" ]; then
+            echo "iOS workspace missing -> running expo prebuild"
+            bun run prebuild -- --non-interactive
+          else
+            echo "iOS workspace present; skipping prebuild"
+          fi
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -127,11 +175,18 @@ jobs:
           bundle install --path vendor/bundle
 
       - name: Build iOS App Store IPA
+        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
         working-directory: ios
         run: |
           bundle exec fastlane build_appstore_ipa
 
+      - name: Skip iOS build (missing signing secrets)
+        if: ${{ env.HAS_IOS_SIGNING != 'true' }}
+        run: |
+          echo "Skipping iOS build: required signing secrets not configured"
+
       - name: Upload artifacts
+        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: ios-build
