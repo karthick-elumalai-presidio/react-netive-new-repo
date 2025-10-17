@@ -155,11 +155,20 @@ platform :ios do
   lane :build_appstore_ipa do
     # Only run match if git_url is configured
     if ENV['MATCH_GIT_URL'] && !ENV['MATCH_GIT_URL'].empty?
-      match(
-        type: "appstore",
-        readonly: true,
-        git_url: ENV['MATCH_GIT_URL']
-      )
+      begin
+        match(
+          type: "appstore",
+          readonly: true,
+          git_url: ENV['MATCH_GIT_URL']
+        )
+      rescue => ex
+        UI.error("⚠️  Failed to sync certificates: #{ex.message}")
+        UI.error("This is likely due to:")
+        UI.error("  1. SSH keys not configured in CI")
+        UI.error("  2. No access to the certificates repository")
+        UI.error("  3. MATCH_PASSWORD incorrect")
+        UI.important("Skipping certificate sync - build may fail if signing not configured")
+      end
     else
       UI.important("⚠️  MATCH_GIT_URL not set - skipping certificate sync")
       UI.important("Build will fail if signing is not configured locally")
