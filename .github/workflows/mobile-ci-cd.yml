@@ -254,6 +254,12 @@ jobs:
             cp /tmp/ios-fastlane-backup/Gemfile.lock ios/ || true
           fi
 
+      - name: Install CocoaPods dependencies
+        working-directory: ios
+        run: |
+          echo "📦 Installing pods to create .xcworkspace..."
+          pod install --repo-update
+
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
