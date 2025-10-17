@@ -125,7 +125,18 @@ jobs:
       - name: Build Android release (AAB/APK)
         working-directory: android
         run: |
-          bundle exec fastlane build_release
+          if [ -f Gemfile ]; then
+            echo "Running fastlane with bundler"
+            bundle exec fastlane build_release || fastlane build_release
+          else
+            echo "No Gemfile detected; running fastlane directly"
+            fastlane build_release
+          fi
+
+      - name: Android build failure summary
+        if: failure()
+        run: |
+          echo "Android build failed. See logs above."
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -190,7 +201,18 @@ jobs:
         if: ${{ env.HAS_IOS_SIGNING == 'true' }}
         working-directory: ios
         run: |
-          bundle exec fastlane build_appstore_ipa
+          if [ -f Gemfile ]; then
+            echo "Running fastlane with bundler (iOS)"
+            bundle exec fastlane build_appstore_ipa || fastlane build_appstore_ipa
+          else
+            echo "No Gemfile detected; running fastlane directly (iOS)"
+            fastlane build_appstore_ipa
+          fi
+
+      - name: iOS build failure summary
+        if: failure()
+        run: |
+          echo "iOS build failed. See logs above."
 
       - name: Skip iOS build (missing signing secrets)
         if: ${{ env.HAS_IOS_SIGNING != 'true' }}
@@ -245,6 +267,12 @@ jobs:
     environment:
       name: development
     steps:
+      - name: Stop if any build failed
+        if: ${{ needs.build_android.result == 'failure' || (needs.build_ios && needs.build_ios.result == 'failure') }}
+        run: |
+          echo "Aborting deploy: a build job failed."
+          exit 1
+
       - name: Download Android artifacts
         uses: actions/download-artifact@v4
         with:
@@ -274,6 +302,11 @@ jobs:
     environment:
       name: qa
     steps:
+      - name: Stop if any build failed
+        if: ${{ needs.build_android.result == 'failure' || needs.build_ios.result == 'failure' }}
+        run: |
+          echo "Aborting QA deploy: a build job failed."
+          exit 1
       - name: Download Android artifacts
         uses: actions/download-artifact@v4
         with:
@@ -324,6 +357,11 @@ jobs:
     environment:
       name: production
     steps:
+      - name: Stop if any build failed
+        if: ${{ needs.build_android.result == 'failure' || needs.build_ios.result == 'failure' }}
+        run: |
+          echo "Aborting production deploy: a build job failed."
+          exit 1
       - name: Download Android artifacts
         uses: actions/download-artifact@v4
         with:
