@@ -215,8 +215,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bun-
 
-
-              - name: Install JS dependencies
+      - name: Install JS dependencies
         run: bun install --frozen-lockfile || bun install
 
       - name: Cache CocoaPods
