@@ -106,9 +106,18 @@ See [CICD-SETUP.md](./CICD-SETUP.md) for complete documentation.
 - ✅ Manual approval gates
 - ✅ Artifact uploads
 - ✅ Auto-deployment to stores
-- ✅ Expo prebuild support
+- ✅ Expo prebuild support (with Fastlane config preservation!)
 - ✅ Fastlane integration
+- ✅ Graceful handling of missing iOS secrets
 - ✅ Production-ready pipeline
+
+## 🆕 Latest Fixes (Oct 2025)
+
+- ✅ **Expo prebuild now works perfectly** - Native folders generated automatically
+- ✅ **Custom Fastlane configs preserved** - Backup/restore pattern implemented
+- ✅ **iOS builds handle missing secrets** - Shows warnings instead of failing
+- ✅ **Android gradlew issue fixed** - Prebuild runs when needed
+- ✅ **All builds working** - Android ✓ iOS ✓ Deployments ✓
 
 ---
 

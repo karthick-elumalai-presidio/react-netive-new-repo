@@ -22,12 +22,20 @@ platform :ios do
   
   desc "Match certificates and provisioning profiles for App Store"
   lane :match_appstore do
-    match(type: "appstore", readonly: true)
+    if ENV['MATCH_GIT_URL'] && !ENV['MATCH_GIT_URL'].empty?
+      match(type: "appstore", readonly: true, git_url: ENV['MATCH_GIT_URL'])
+    else
+      UI.error("MATCH_GIT_URL not configured. Please set it up.")
+    end
   end
 
   desc "Match certificates and provisioning profiles for development"
   lane :match_development do
-    match(type: "development", readonly: true)
+    if ENV['MATCH_GIT_URL'] && !ENV['MATCH_GIT_URL'].empty?
+      match(type: "development", readonly: true, git_url: ENV['MATCH_GIT_URL'])
+    else
+      UI.error("MATCH_GIT_URL not configured. Please set it up.")
+    end
   end
 
   desc "Build debug version (default lane alias)"
@@ -68,7 +76,11 @@ platform :ios do
 
   desc "Build and upload to TestFlight"
   lane :deploy_testflight do
-    match(type: "appstore", readonly: true)
+    if ENV['MATCH_GIT_URL'] && !ENV['MATCH_GIT_URL'].empty?
+      match(type: "appstore", readonly: true, git_url: ENV['MATCH_GIT_URL'])
+    else
+      UI.important("⚠️  MATCH_GIT_URL not set - skipping certificate sync")
+    end
     
     build_app(
       workspace: "CbMmobileapp.xcworkspace",
@@ -84,7 +96,11 @@ platform :ios do
 
   desc "Build and upload to App Store"
   lane :deploy_appstore do
-    match(type: "appstore", readonly: true)
+    if ENV['MATCH_GIT_URL'] && !ENV['MATCH_GIT_URL'].empty?
+      match(type: "appstore", readonly: true, git_url: ENV['MATCH_GIT_URL'])
+    else
+      UI.important("⚠️  MATCH_GIT_URL not set - skipping certificate sync")
+    end
     
     build_app(
       workspace: "CbMmobileapp.xcworkspace",
@@ -103,7 +119,11 @@ platform :ios do
   # Builds a development-signed IPA and stores it at ios/build/ios/dev.ipa
   desc "Build development IPA artifact"
   lane :build_dev_ipa do
-    match(type: "development", readonly: true)
+    if ENV['MATCH_GIT_URL'] && !ENV['MATCH_GIT_URL'].empty?
+      match(type: "development", readonly: true, git_url: ENV['MATCH_GIT_URL'])
+    else
+      UI.important("⚠️  MATCH_GIT_URL not set - skipping certificate sync")
+    end
 
     build_app(
       workspace: "CbMmobileapp.xcworkspace",
@@ -133,7 +153,17 @@ platform :ios do
   # Builds an App Store signed IPA and stores it at ios/build/ios/release.ipa
   desc "Build App Store (Release) IPA artifact"
   lane :build_appstore_ipa do
-    match(type: "appstore", readonly: true)
+    # Only run match if git_url is configured
+    if ENV['MATCH_GIT_URL'] && !ENV['MATCH_GIT_URL'].empty?
+      match(
+        type: "appstore",
+        readonly: true,
+        git_url: ENV['MATCH_GIT_URL']
+      )
+    else
+      UI.important("⚠️  MATCH_GIT_URL not set - skipping certificate sync")
+      UI.important("Build will fail if signing is not configured locally")
+    end
 
     build_app(
       workspace: "CbMmobileapp.xcworkspace",

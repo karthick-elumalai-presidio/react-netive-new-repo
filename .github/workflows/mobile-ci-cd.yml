@@ -79,6 +79,31 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile || bun install
 
+      - name: Backup Fastlane config
+        run: |
+          mkdir -p /tmp/android-fastlane-backup
+          cp -r android/fastlane /tmp/android-fastlane-backup/ || true
+          cp android/Gemfile /tmp/android-fastlane-backup/ || true
+          cp android/Gemfile.lock /tmp/android-fastlane-backup/ || true
+
+      - name: Expo prebuild (generate Android native project)
+        run: |
+          if [ ! -f "android/gradlew" ]; then
+            echo "Running expo prebuild for Android..."
+            bun run prebuild --platform android --clean
+          else
+            echo "Android gradle wrapper exists, skipping prebuild"
+          fi
+
+      - name: Restore Fastlane config
+        run: |
+          if [ -d "/tmp/android-fastlane-backup/fastlane" ]; then
+            echo "Restoring custom Fastlane configuration..."
+            cp -r /tmp/android-fastlane-backup/fastlane android/
+            cp /tmp/android-fastlane-backup/Gemfile android/ || true
+            cp /tmp/android-fastlane-backup/Gemfile.lock android/ || true
+          fi
+
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -169,6 +194,31 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile || bun install
 
+      - name: Backup Fastlane config (iOS)
+        run: |
+          mkdir -p /tmp/ios-fastlane-backup
+          cp -r ios/fastlane /tmp/ios-fastlane-backup/ || true
+          cp ios/Gemfile /tmp/ios-fastlane-backup/ || true
+          cp ios/Gemfile.lock /tmp/ios-fastlane-backup/ || true
+
+      - name: Expo prebuild (generate iOS native project)
+        run: |
+          if [ ! -d "ios/CbMmobileapp.xcworkspace" ]; then
+            echo "Running expo prebuild for iOS..."
+            bun run prebuild --platform ios --clean
+          else
+            echo "iOS workspace exists, skipping prebuild"
+          fi
+
+      - name: Restore Fastlane config (iOS)
+        run: |
+          if [ -d "/tmp/ios-fastlane-backup/fastlane" ]; then
+            echo "Restoring custom Fastlane configuration..."
+            cp -r /tmp/ios-fastlane-backup/fastlane ios/
+            cp /tmp/ios-fastlane-backup/Gemfile ios/ || true
+            cp /tmp/ios-fastlane-backup/Gemfile.lock ios/ || true
+          fi
+
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -195,6 +245,10 @@ jobs:
           FASTLANE_SKIP_UPDATE_CHECK: true
           FASTLANE_DISABLE_COLORS: true
           FASTLANE_OPT_OUT_USAGE: true
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           echo "PWD: $(pwd)" && ls -la && echo "--- fastlane dir ---" && ls -la fastlane || true
           if [ -f Gemfile ]; then

@@ -74,6 +74,32 @@ jobs:
           echo " Running unit tests with coverage..."
           npm run test:coverage
 
+      # Backup and restore Fastlane configs
+      - name: Backup Fastlane config
+        run: |
+          mkdir -p /tmp/android-fastlane-backup
+          cp -r android/fastlane /tmp/android-fastlane-backup/ || true
+          cp android/Gemfile /tmp/android-fastlane-backup/ || true
+          cp android/Gemfile.lock /tmp/android-fastlane-backup/ || true
+
+      - name: Expo prebuild (generate Android native project)
+        run: |
+          if [ ! -f "android/gradlew" ]; then
+            echo "Running expo prebuild for Android..."
+            npx expo prebuild --platform android --clean --no-install
+          else
+            echo "Android gradle wrapper exists, skipping prebuild"
+          fi
+
+      - name: Restore Fastlane config
+        run: |
+          if [ -d "/tmp/android-fastlane-backup/fastlane" ]; then
+            echo "Restoring custom Fastlane configuration..."
+            cp -r /tmp/android-fastlane-backup/fastlane android/
+            cp /tmp/android-fastlane-backup/Gemfile android/ || true
+            cp /tmp/android-fastlane-backup/Gemfile.lock android/ || true
+          fi
+
       # Android Build Check
       - name: Setup Java for Android
         uses: actions/setup-java@v4
