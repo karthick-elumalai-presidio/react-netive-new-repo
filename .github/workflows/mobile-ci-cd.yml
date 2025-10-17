@@ -33,7 +33,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Node.js on runners is sufficient; Bun will be used for install
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
