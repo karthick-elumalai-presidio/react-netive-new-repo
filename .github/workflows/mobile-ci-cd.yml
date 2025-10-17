@@ -124,12 +124,20 @@ jobs:
 
       - name: Build Android release (AAB/APK)
         working-directory: android
+        env:
+          CI: true
+          FASTLANE_SKIP_UPDATE_CHECK: true
+          FASTLANE_DISABLE_COLORS: true
+          FASTLANE_OPT_OUT_USAGE: true
         run: |
+          echo "PWD: $(pwd)" && ls -la && echo "--- fastlane dir ---" && ls -la fastlane || true
           if [ -f Gemfile ]; then
             echo "Running fastlane with bundler"
+            bundle exec fastlane --version || true
             bundle exec fastlane build_release || fastlane build_release
           else
             echo "No Gemfile detected; running fastlane directly"
+            fastlane --version || true
             fastlane build_release
           fi
 
@@ -200,7 +208,13 @@ jobs:
       - name: Build iOS App Store IPA
         if: ${{ env.HAS_IOS_SIGNING == 'true' }}
         working-directory: ios
+        env:
+          CI: true
+          FASTLANE_SKIP_UPDATE_CHECK: true
+          FASTLANE_DISABLE_COLORS: true
+          FASTLANE_OPT_OUT_USAGE: true
         run: |
+          echo "PWD: $(pwd)" && ls -la && echo "--- fastlane dir ---" && ls -la fastlane || true
           if [ -f Gemfile ]; then
             echo "Running fastlane with bundler (iOS)"
             bundle exec fastlane build_appstore_ipa || fastlane build_appstore_ipa
