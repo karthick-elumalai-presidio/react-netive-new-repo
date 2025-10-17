@@ -303,6 +303,9 @@ jobs:
           echo "Aborting deploy: a build job failed."
           exit 1
 
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download Android artifacts
         uses: actions/download-artifact@v4
         with:
@@ -322,6 +325,7 @@ jobs:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
           bundle install --path vendor/bundle
+          # Use the already built artifacts
           bundle exec fastlane deploy_beta
 
       # Optional iOS upload to TestFlight Internal for development
@@ -368,6 +372,10 @@ jobs:
         run: |
           echo "Aborting QA deploy: a build job failed."
           exit 1
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download Android artifacts
         uses: actions/download-artifact@v4
         with:
@@ -408,7 +416,7 @@ jobs:
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
           bundle install --path vendor/bundle
-          bundle exec fastlane upload_testflight_ipa ipa:build/ios/release.ipa
+          bundle exec fastlane upload_testflight_ipa ipa:../ios-artifacts/release.ipa || bundle exec fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
 
   deploy_production:
     name: Deploy to Production
@@ -423,6 +431,10 @@ jobs:
         run: |
           echo "Aborting production deploy: a build job failed."
           exit 1
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download Android artifacts
         uses: actions/download-artifact@v4
         with:
@@ -463,4 +475,4 @@ jobs:
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
           bundle install --path vendor/bundle
-          bundle exec fastlane upload_appstore_ipa ipa:build/ios/release.ipa
+          bundle exec fastlane upload_appstore_ipa ipa:../ios-artifacts/release.ipa || bundle exec fastlane upload_appstore_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)

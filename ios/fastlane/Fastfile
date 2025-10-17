@@ -17,8 +17,9 @@ default_platform(:ios)
 
 platform :ios do
   before_all do
-    setup_ci # optimize fastlane for CI environments (no prompts, keychain setup, hide output)
+    setup_ci if ENV['CI'] # optimize fastlane for CI environments (no prompts, keychain setup, hide output)
   end
+  
   desc "Match certificates and provisioning profiles for App Store"
   lane :match_appstore do
     match(type: "appstore", readonly: true)
@@ -27,6 +28,11 @@ platform :ios do
   desc "Match certificates and provisioning profiles for development"
   lane :match_development do
     match(type: "development", readonly: true)
+  end
+
+  desc "Build debug version (default lane alias)"
+  lane :build do
+    build_debug
   end
 
   desc "Build debug version"

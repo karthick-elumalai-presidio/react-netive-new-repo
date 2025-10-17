@@ -16,6 +16,11 @@
 default_platform(:android)
 
 platform :android do
+  desc "Build debug APK (alias for build_debug)"
+  lane :build do
+    build_debug
+  end
+
   desc "Build debug APK"
   lane :build_debug do
     gradle(

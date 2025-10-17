@@ -72,17 +72,17 @@ jobs:
       - name: Run Tests with Coverage
         run: |
           echo " Running unit tests with coverage..."
-          npm run test:coverage || { echo " Jest tests failed"; exit 1; }
+          npm run test:coverage
 
-      # Upload Coverage Reports
-      - name: Upload Coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
+      # Expo Prebuild (ensure native projects exist)
+      - name: Expo Prebuild (Android)
+        run: |
+          if [ ! -f "android/gradlew" ]; then
+            echo "Running expo prebuild to generate native Android project..."
+            npx expo prebuild --platform android --no-install
+          else
+            echo "Android project already exists, skipping prebuild"
+          fi
 
       # Android Build Check
       - name: Setup Java for Android
@@ -94,13 +94,13 @@ jobs:
       - name: Setup Ruby for Fastlane
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.1'
+          ruby-version: '3.2'
           bundler-cache: true
           working-directory: './android'
 
       - name: Android Build Check
+        working-directory: android
         run: |
-          cd android
           bundle install
           bundle exec fastlane build
 
