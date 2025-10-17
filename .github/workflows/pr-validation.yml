@@ -74,16 +74,6 @@ jobs:
           echo " Running unit tests with coverage..."
           npm run test:coverage
 
-      # Expo Prebuild (ensure native projects exist)
-      - name: Expo Prebuild (Android)
-        run: |
-          if [ ! -f "android/gradlew" ]; then
-            echo "Running expo prebuild to generate native Android project..."
-            npx expo prebuild --platform android --no-install
-          else
-            echo "Android project already exists, skipping prebuild"
-          fi
-
       # Android Build Check
       - name: Setup Java for Android
         uses: actions/setup-java@v4
