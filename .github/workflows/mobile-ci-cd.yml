@@ -87,29 +87,11 @@ jobs:
           else
             echo "Gradle wrapper present; skipping prebuild"
           fi
-
-      - name: Ensure Fastlane config (Android)
+      - name: Verify Fastlane config (Android)
         working-directory: android
         run: |
-          if [ ! -f fastlane/Fastfile ]; then
-            echo "No fastlane/Fastfile found. Creating a minimal Fastfile for CI."
-            mkdir -p fastlane
-            cat > fastlane/Fastfile <<'RUBY'
-default_platform(:android)
-
-platform :android do
-  desc "Build release APK and AAB"
-  lane :build_release do
-    gradle(
-      task: "bundleRelease assembleRelease",
-      project_dir: "."
-    )
-  end
-end
-RUBY
-          else
-            echo "Found fastlane/Fastfile"
-          fi
+          echo "Checking for android/fastlane/Fastfile..."
+          test -f fastlane/Fastfile && echo "Found android/fastlane/Fastfile" || (echo "Missing android/fastlane/Fastfile" && exit 1)
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -209,33 +191,11 @@ RUBY
           else
             echo "iOS workspace present; skipping prebuild"
           fi
-
-      - name: Ensure Fastlane config (iOS)
+      - name: Verify Fastlane config (iOS)
         working-directory: ios
         run: |
-          if [ ! -f fastlane/Fastfile ]; then
-            echo "No fastlane/Fastfile found. Creating a minimal Fastfile for CI."
-            mkdir -p fastlane
-            cat > fastlane/Fastfile <<'RUBY'
-default_platform(:ios)
-
-platform :ios do
-  desc "Build App Store (Release) IPA artifact"
-  lane :build_appstore_ipa do
-    build_app(
-      workspace: "CbMmobileapp.xcworkspace",
-      scheme: "CbMmobileapp",
-      configuration: "Release",
-      export_method: "app-store",
-      output_directory: "build/ios",
-      output_name: "release.ipa"
-    )
-  end
-end
-RUBY
-          else
-            echo "Found fastlane/Fastfile"
-          fi
+          echo "Checking for ios/fastlane/Fastfile..."
+          test -f fastlane/Fastfile && echo "Found ios/fastlane/Fastfile" || (echo "Missing ios/fastlane/Fastfile" && exit 1)
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
