@@ -275,11 +275,17 @@ jobs:
   # Deploy jobs are environment-scoped. They only consume artifacts and do not rebuild.
   deploy_development:
     name: Deploy to Development
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     needs: [approve_development]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'development' }}
     environment:
       name: development
+    env:
+      CI: true
+      FASTLANE_SKIP_UPDATE_CHECK: true
+      FASTLANE_DISABLE_COLORS: true
+      FASTLANE_OPT_OUT_USAGE: true
+      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && secrets.MATCH_GIT_URL != '' && secrets.MATCH_PASSWORD != '' }}
     steps:
       - name: Stop if any build failed
         if: ${{ needs.build_android.result == 'failure' || (needs.build_ios && needs.build_ios.result == 'failure') }}
@@ -307,6 +313,37 @@ jobs:
         run: |
           bundle install --path vendor/bundle
           bundle exec fastlane deploy_beta
+
+      # Optional iOS upload to TestFlight Internal for development
+      - name: Download iOS artifacts
+        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-build
+          path: ios-artifacts
+
+      - name: Setup Ruby (iOS)
+        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: ios
+
+      - name: Upload iOS IPA to TestFlight (Development)
+        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
+        working-directory: ios
+        env:
+          APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
+        run: |
+          if [ -f Gemfile ]; then
+            bundle config set --local path 'vendor/bundle'
+            bundle install --jobs 4 --retry 3
+            bundle exec fastlane upload_testflight_ipa ipa:../ios-artifacts/release.ipa || bundle exec fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
+          else
+            gem install fastlane --no-document
+            fastlane upload_testflight_ipa ipa:../ios-artifacts/release.ipa || fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
+          fi
 
   deploy_qa:
     name: Deploy to QA
