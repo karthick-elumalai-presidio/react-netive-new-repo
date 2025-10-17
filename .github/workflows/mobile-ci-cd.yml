@@ -3,436 +3,267 @@ name: Mobile App CI/CD
 on:
   push:
     branches:
-      - main 
       - develop
-      - qa
+      - main
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to deploy to'
+        description: Target environment
         required: true
-        default: 'development'
+        default: development
         type: choice
         options:
           - development
           - qa
           - production
-      platform:
-        description: 'Platform to build'
-        required: true
-        default: 'all'
-        type: choice
-        options:
-          - ios
-          - android
-          - all
 
-permissions:
-  id-token: write
-  contents: read
-  actions: read
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
-  NODE_VERSION: lts/*
-  APPLE_ID: ${{ secrets.APPLE_ID }}
-  APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-  MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
-  MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-  FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
-  GOOGLE_PLAY_JSON_KEY_PATH: ${{ secrets.GOOGLE_PLAY_JSON_KEY_PATH }}
-  APP_ENV: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'qa' && 'qa' || 'development' }}
+  NODE_VERSION: '20'
+  BUN_VERSION: '1.1.34'
 
-# -------------------- DEVELOPMENT -------------------- #
 jobs:
   validate:
     name: Validate (Lint, Typecheck, Tests)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile || bun install
 
-      - name: Lint & Typecheck
-        run: |
-          npm run lint || true
-          npm run type-check || true
+      - name: Lint
+        run: bun run lint
 
-      - name: Unit tests
-        run: npm run test:coverage || true
-  deploy-dev:
-    name: Build & Deploy (Development)
-    if: github.ref_name == 'develop' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'development')
-    runs-on: macos-latest
+      - name: Typecheck
+        run: bun x tsc -p tsconfig.json --noEmit
+
+      # If you add tests later, enable this
+      # - name: Test
+      #   run: bun test
+
+  build_android:
+    name: Build Android Artifact
+    runs-on: ubuntu-latest
     needs: validate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: android
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install Fastlane deps (Android)
+        working-directory: android
+        run: |
+          bundle install --path vendor/bundle
+
+      - name: Build Android release (AAB/APK)
+        working-directory: android
+        run: |
+          bundle exec fastlane build_release
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-build
+          path: |
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/outputs/apk/release/*.apk
+
+  build_ios:
+    name: Build iOS Artifact
+    runs-on: macos-14
+    needs: validate
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: ios
+
+      - name: Install Fastlane deps (iOS)
+        working-directory: ios
+        run: |
+          bundle install --path vendor/bundle
+
+      - name: Build iOS App Store IPA
+        working-directory: ios
+        run: |
+          bundle exec fastlane build_appstore_ipa
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: |
+            ios/build/ios/*.ipa
+
+  # Deploy jobs are environment-scoped. They only consume artifacts and do not rebuild.
+  deploy_development:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [build_android]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'development' }}
     environment:
       name: development
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
         with:
-          bun-version: latest
+          name: android-build
+          path: android-artifacts
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Environment Info
-        run: |
-          echo "Bun version: $(bun --version)"
-          echo "Node version: $(node --version)"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Environment: Development"
-          echo "Platform: ${{ inputs.platform || 'all' }}"
-
-      # Prebuild for Expo (only if native dirs missing; avoid deleting Fastlane files)
-      - name: Prebuild Project
-        run: |
-          if [ ! -d "ios" ] || [ ! -d "android" ]; then
-            echo "Native folders missing; running prebuild"
-            bun run prebuild
-          else
-            echo "Native folders present; skipping prebuild"
-          fi
-
-      # iOS FIRST, Android AFTER iOS success (if requested)
-
-      # iOS Build (Development)
-      - name: Setup Ruby for iOS
-        if: inputs.platform == 'ios' || inputs.platform == 'all' || inputs.platform == null
+      - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.1'
+          ruby-version: '3.2'
           bundler-cache: true
-          working-directory: './ios'
+          working-directory: android
 
-      - name: Setup SSH for Match
-        if: inputs.platform == 'ios' || inputs.platform == 'all' || inputs.platform == null
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: |
-            ${{ secrets.MATCH_DEPLOY_KEY }}
-
-      - name: iOS Build (Development)
-        if: inputs.platform == 'ios' || inputs.platform == 'all' || inputs.platform == null
+      - name: Deploy Android to Internal track
+        working-directory: android
         env:
-          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
-        working-directory: ./ios
+          SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
-          echo "pwd: $(pwd)"
-          ls -la
-          # Verify SSH access to Match repo
-
-          GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new" git ls-remote "$MATCH_GIT_URL" > /dev/null
-          echo "Fastlane Fastfile preview (first 60 lines):"
-          nl -ba fastlane/Fastfile | sed -n '1,60p' || true
-          echo "-- End Fastfile preview --"
-          bundle install || true
-          bundle exec fastlane match_development
-          bundle exec fastlane build_debug
-
-      - name: Upload iOS Artifacts
-        if: inputs.platform == 'ios' || inputs.platform == 'all' || inputs.platform == null
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-dev-build
-          path: ios/build/
-          retention-days: 7
-
-      # Android Build (runs after iOS success)
-      - name: Setup Java for Android
-        if: success() && (inputs.platform == 'android' || inputs.platform == 'all')
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Ruby for Android
-        if: success() && (inputs.platform == 'android' || inputs.platform == 'all')
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.1'
-          bundler-cache: true
-          working-directory: './android'
-
-      - name: Android Build
-        if: success() && (inputs.platform == 'android' || inputs.platform == 'all')
-        run: |
-          cd android
-          bundle install
-          bundle exec fastlane build_debug
-
-      - name: Upload Android Artifacts
-        if: success() && (inputs.platform == 'android' || inputs.platform == 'all')
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-dev-build
-          path: android/app/build/outputs/apk/debug/*.apk
-          retention-days: 7
-
-      # Notify Build Status
-      - name: Notify Development Build Status
-        if: always()
-        run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo " Development build completed successfully!"
-            echo " Build artifacts available for download"
-            echo " Environment: Development"
-            echo " Build URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          else
-            echo " Development build had issues"
-            echo " Check logs for more details"
-          fi
-
-# -------------------- QA -------------------- #
-  deploy-qa:
-    name: Build & Deploy (QA)
-    if: github.ref_name == 'qa' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'qa')
-    runs-on: macos-latest
-    needs: approval-qa
-    environment:
-      name: qa
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Environment Info
-        run: |
-          echo "Bun version: $(bun --version)"
-          echo "Node version: $(node --version)"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Environment: QA"
-          echo "Platform: ${{ inputs.platform || 'all' }}"
-
-      # Prebuild for Expo
-      - name: Prebuild Project
-        run: |
-          bun run prebuild --clean
-
-      # Android Build
-      - name: Setup Java for Android
-        if: inputs.platform == 'android' || inputs.platform == 'all' || inputs.platform == null
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Ruby for Android
-        if: inputs.platform == 'android' || inputs.platform == 'all' || inputs.platform == null
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.1'
-          bundler-cache: true
-          working-directory: './android'
-
-      - name: Android Build & Deploy
-        if: inputs.platform == 'android' || inputs.platform == 'all' || inputs.platform == null
-        env:
-          GOOGLE_PLAY_JSON_KEY_PATH: ${{ secrets.GOOGLE_PLAY_JSON_KEY_PATH }}
-        run: |
-          cd android
-          bundle install
-          bundle exec fastlane build_release
+          bundle install --path vendor/bundle
           bundle exec fastlane deploy_beta
 
-      # iOS Build
-      - name: Setup Ruby for iOS
-        if: inputs.platform == 'ios' || inputs.platform == 'all' || inputs.platform == null
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.1'
-          bundler-cache: true
-          working-directory: './ios'
-
-      - name: iOS Build & Deploy
-        if: inputs.platform == 'ios' || inputs.platform == 'all' || inputs.platform == null
-        env:
-          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
-        working-directory: ./ios
-        run: |
-          echo "pwd: $(pwd)"
-          ls -la
-          # Verify SSH access to Match repo
-          GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new" git ls-remote "$MATCH_GIT_URL" > /dev/null
-          bundle install
-          bundle exec fastlane match_appstore
-          bundle exec fastlane deploy_testflight
-
-      # Upload Artifacts
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: qa-build-artifacts
-          path: |
-            android/app/build/outputs/apk/release/*.apk
-            android/app/build/outputs/bundle/release/*.aab
-            ios/build/
-          retention-days: 14
-
-      # Notify Build Status
-      - name: Notify QA Build Status
-        if: always()
-        run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo " QA build completed successfully!"
-            echo " Build artifacts available for download"
-            echo " Environment: QA"
-            echo " Build URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          else
-            echo " QA build had issues"
-            echo " Check logs for more details"
-          fi
-
-# -------------------- PRODUCTION -------------------- #
-  approval-qa:
-    name: Manual Approval (QA)
-    if: github.ref_name == 'qa' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'qa')
-    runs-on: ubuntu-latest
-    needs: validate
+  deploy_qa:
+    name: Deploy to QA
+    runs-on: macos-14
+    needs: [build_android, build_ios]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'qa' }}
     environment:
       name: qa
     steps:
-      - run: echo " QA deployment approved."
-
-  approval-prod:
-    name: Manual Approval (Production)
-    if: github.ref_name == 'main' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
-    runs-on: ubuntu-latest
-    needs: validate
-    environment:
-      name: production
-    steps:
-      - run: echo " Production deployment approved."
-
-  deploy-prod:
-    name: Build & Deploy (Production)
-    needs: approval-prod
-    runs-on: macos-latest
-    environment:
-      name: production
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
         with:
-          bun-version: latest
+          name: android-build
+          path: android-artifacts
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Environment Info
-        run: |
-          echo "Bun version: $(bun --version)"
-          echo "Node version: $(node --version)"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Environment: Production"
-          echo "Platform: ${{ inputs.platform || 'all' }}"
-
-      # Prebuild for Expo
-      - name: Prebuild Project
-        run: |
-          bun run prebuild --clean
-
-      # Android Build
-      - name: Setup Java for Android
-        if: inputs.platform == 'android' || inputs.platform == 'all' || inputs.platform == null
-        uses: actions/setup-java@v4
+      - name: Download iOS artifacts
+        uses: actions/download-artifact@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          name: ios-build
+          path: ios-artifacts
 
-      - name: Setup Ruby for Android
-        if: inputs.platform == 'android' || inputs.platform == 'all' || inputs.platform == null
+      - name: Setup Ruby (Android)
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.1'
+          ruby-version: '3.2'
           bundler-cache: true
-          working-directory: './android'
+          working-directory: android
 
-      - name: Android Build & Deploy
-        if: inputs.platform == 'android' || inputs.platform == 'all' || inputs.platform == null
+      - name: Deploy Android to Internal track
+        working-directory: android
         env:
-          GOOGLE_PLAY_JSON_KEY_PATH: ${{ secrets.GOOGLE_PLAY_JSON_KEY_PATH }}
+          SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
-          cd android
-          bundle install
-          bundle exec fastlane build_release
+          bundle install --path vendor/bundle
+          bundle exec fastlane deploy_beta
+
+      - name: Setup Ruby (iOS)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: ios
+
+      - name: Upload iOS IPA to TestFlight
+        working-directory: ios
+        env:
+          APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
+        run: |
+          bundle install --path vendor/bundle
+          bundle exec fastlane upload_testflight_ipa ipa:build/ios/release.ipa
+
+  deploy_production:
+    name: Deploy to Production
+    runs-on: macos-14
+    needs: [build_android, build_ios]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' }}
+    environment:
+      name: production
+    steps:
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-build
+          path: android-artifacts
+
+      - name: Download iOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-build
+          path: ios-artifacts
+
+      - name: Setup Ruby (Android)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+          bundler-cache: true
+          working-directory: android
+
+      - name: Deploy Android to Production
+        working-directory: android
+        env:
+          SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
+        run: |
+          bundle install --path vendor/bundle
           bundle exec fastlane deploy_production
 
-      # iOS Build
-      - name: Setup Ruby for iOS
-        if: inputs.platform == 'ios' || inputs.platform == 'all' || inputs.platform == null
+      - name: Setup Ruby (iOS)
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.1'
+          ruby-version: '3.2'
           bundler-cache: true
-          working-directory: './ios'
+          working-directory: ios
 
-      - name: iOS Build & Deploy
-        if: inputs.platform == 'ios' || inputs.platform == 'all' || inputs.platform == null
+      - name: Upload iOS IPA to App Store
+        working-directory: ios
         env:
-          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          FASTLANE_PASSWORD: ${{ secrets.FASTLANE_PASSWORD }}
-        working-directory: ./ios
+          APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
-          echo "pwd: $(pwd)"
-          ls -la
-          # Verify SSH access to Match repo
-          GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new" git ls-remote "$MATCH_GIT_URL" > /dev/null
-          bundle install
-          bundle exec fastlane match_appstore
-          bundle exec fastlane deploy_appstore
-
-      # Upload Artifacts
-      - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: production-build-artifacts
-          path: |
-            android/app/build/outputs/apk/release/*.apk
-            android/app/build/outputs/bundle/release/*.aab
-            ios/build/
-          retention-days: 30
-
-      # Notify Build Status
-      - name: Notify Production Build Status
-        if: always()
-        run: |
-          if [ "${{ job.status }}" == "success" ]; then
-            echo " Production build completed successfully!"
-            echo " Build artifacts available for download"
-            echo " Environment: Production"
-            echo " Build URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          else
-            echo " Production build had issues"
-            echo " Check logs for more details"
-          fi
+          bundle install --path vendor/bundle
+          bundle exec fastlane upload_appstore_ipa ipa:build/ios/release.ipa
