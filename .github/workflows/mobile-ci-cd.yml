@@ -82,7 +82,7 @@ jobs:
           path: |
             ~/.bun/install/cache
             node_modules
-          key: v2-${{ runner.os }}-bun-${{ hashFiles('**/package.json', '**/bun.lockb') }}
+          key: v2-${{ runner.os }}-bun-${{ hashFiles('**/package.json', '**/bun.lock') }}
           restore-keys: |
             v2-${{ runner.os }}-bun-
 
@@ -277,7 +277,7 @@ jobs:
           path: |
             ~/.bun/install/cache
             node_modules
-          key: v2-${{ runner.os }}-bun-${{ hashFiles('**/package.json', '**/bun.lockb') }}
+          key: v2-${{ runner.os }}-bun-${{ hashFiles('**/package.json', '**/bun.lock') }}
           restore-keys: |
             v2-${{ runner.os }}-bun-
 
