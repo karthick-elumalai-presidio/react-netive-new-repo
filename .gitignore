@@ -16,17 +16,17 @@ expo-env.d.ts
 
 # Native directories are now committed for fast CI builds
 # Only exclude build outputs and temporary files
-android/build/
-android/app/build/
-android/.gradle/
-android/local.properties
+# android/build/
+# android/app/build/
+# android/.gradle/
+# android/local.properties
 
-ios/build/
-ios/Pods/
-ios/**/*.xcworkspace/xcuserdata/
-ios/**/*.xcodeproj/xcuserdata/
-ios/**/*.xcodeproj/project.xcworkspace/xcuserdata/
-ios/DerivedData/
+# ios/build/
+# ios/Pods/
+# ios/**/*.xcworkspace/xcuserdata/
+# ios/**/*.xcodeproj/xcuserdata/
+# ios/**/*.xcodeproj/project.xcworkspace/xcuserdata/
+# ios/DerivedData/
 
 # macOS
 .DS_Store
