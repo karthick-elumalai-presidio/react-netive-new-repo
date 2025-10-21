@@ -14,7 +14,8 @@ permissions:
   pull-requests: write
 
 env:
-  NODE_VERSION: 18
+  NODE_VERSION: '20'
+  BUN_VERSION: '1.1.34'
 
 jobs:
   validate:
@@ -32,21 +33,27 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: ''
+
+      # Setup Bun
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
 
       # Print Environment Info
       - name: Environment Details
         run: |
           echo "Node: $(node --version)"
-          echo "NPM: $(npm --version)"
+          echo "Bun: $(bun --version)"
           echo "Branch: ${{ github.head_ref }} → Base: ${{ github.base_ref }}"
           echo "PR Number: ${{ github.event.number }}"
 
       # Install Dependencies
       - name: Install Dependencies
         run: |
-          echo " Installing dependencies..."
-          npm ci
+          echo " Installing dependencies with Bun..."
+          bun install --frozen-lockfile || bun install
           echo " Dependencies installed successfully."
 
       # Run Code Quality Checks
@@ -55,13 +62,13 @@ jobs:
           FAILED=0
           
           echo " Running ESLint..."
-          npm run lint || { echo " ESLint failed"; FAILED=1; }
+          bun run lint || { echo " ESLint failed"; FAILED=1; }
           
           echo " Checking code formatting..."
-          npm run format:check || { echo " Prettier format check failed"; FAILED=1; }
+          bun run format:check || { echo " Prettier format check failed"; FAILED=1; }
 
           echo " Running TypeScript checks..."
-          npm run type-check || { echo " TypeScript errors found"; FAILED=1; }
+          bun run type-check || { echo " TypeScript errors found"; FAILED=1; }
 
           if [ $FAILED -eq 1 ]; then
             echo " Some validation checks failed."
@@ -72,7 +79,7 @@ jobs:
       - name: Run Tests with Coverage
         run: |
           echo " Running unit tests with coverage..."
-          npm run test:coverage
+          bun run test:coverage
 
       # Backup and restore Fastlane configs
       - name: Backup Fastlane config
@@ -86,7 +93,14 @@ jobs:
         run: |
           if [ ! -f "android/gradlew" ]; then
             echo "Running expo prebuild for Android..."
-            npx expo prebuild --platform android --clean --no-install
+            bun run prebuild --platform android --clean
+            
+            # Verify prebuild succeeded
+            if [ ! -f "android/gradlew" ]; then
+              echo "❌ ERROR: Prebuild failed to generate Android project"
+              exit 1
+            fi
+            echo "✅ Android project generated successfully"
           else
             echo "Android gradle wrapper exists, skipping prebuild"
           fi
