@@ -144,34 +144,52 @@ platform :ios do
     ipa_path = options[:ipa]
     UI.user_error!("Please provide ipa: path/to/file.ipa") if ipa_path.to_s.strip.empty?
 
-    upload_to_testflight(
-      ipa: ipa_path,
-      skip_waiting_for_build_processing: true
-    )
+    # Use App Store Connect API or Apple ID credentials
+    if ENV['APP_STORE_CONNECT_API_KEY_JSON']
+      UI.success("✅ Using App Store Connect API Key for upload")
+      api_key = app_store_connect_api_key(
+        key_id: JSON.parse(ENV['APP_STORE_CONNECT_API_KEY_JSON'])["key_id"],
+        issuer_id: JSON.parse(ENV['APP_STORE_CONNECT_API_KEY_JSON'])["issuer_id"],
+        key: JSON.parse(ENV['APP_STORE_CONNECT_API_KEY_JSON'])["key"]
+      )
+      upload_to_testflight(
+        ipa: ipa_path,
+        skip_waiting_for_build_processing: true,
+        api_key: api_key
+      )
+    elsif ENV['APPLE_ID'] && ENV['APPLE_APP_SPECIFIC_PASSWORD']
+      UI.success("✅ Using Apple ID credentials for upload")
+      upload_to_testflight(
+        ipa: ipa_path,
+        skip_waiting_for_build_processing: true,
+        apple_id: ENV['APPLE_ID'],
+        password: ENV['APPLE_APP_SPECIFIC_PASSWORD'],
+        team_id: ENV['APPLE_TEAM_ID']
+      )
+    else
+      UI.error("❌ No authentication configured for TestFlight upload")
+      UI.error("Set either APP_STORE_CONNECT_API_KEY_JSON or APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD")
+    end
   end
 
   # Builds an App Store signed IPA and stores it at ios/build/ios/release.ipa
   desc "Build App Store (Release) IPA artifact"
   lane :build_appstore_ipa do
-    # Only run match if git_url is configured
-    if ENV['MATCH_GIT_URL'] && !ENV['MATCH_GIT_URL'].empty?
-      begin
-        match(
-          type: "appstore",
-          readonly: true,
-          git_url: ENV['MATCH_GIT_URL']
-        )
-      rescue => ex
-        UI.error("⚠️  Failed to sync certificates: #{ex.message}")
-        UI.error("This is likely due to:")
-        UI.error("  1. SSH keys not configured in CI")
-        UI.error("  2. No access to the certificates repository")
-        UI.error("  3. MATCH_PASSWORD incorrect")
-        UI.important("Skipping certificate sync - build may fail if signing not configured")
-      end
+    # Use automatic code signing with Apple Team ID
+    if ENV['APPLE_TEAM_ID'] && !ENV['APPLE_TEAM_ID'].empty?
+      UI.success("✅ Using automatic code signing with Team ID: #{ENV['APPLE_TEAM_ID']}")
+      
+      # Update project to use automatic signing
+      update_code_signing_settings(
+        path: "CbMmobileapp.xcodeproj",
+        use_automatic_signing: true,
+        team_id: ENV['APPLE_TEAM_ID'],
+        profile_name: nil,
+        code_sign_identity: "Apple Distribution"
+      )
     else
-      UI.important("⚠️  MATCH_GIT_URL not set - skipping certificate sync")
-      UI.important("Build will fail if signing is not configured locally")
+      UI.error("❌ APPLE_TEAM_ID not set - automatic signing will fail")
+      UI.error("Please set APPLE_TEAM_ID in your environment or GitHub Secrets")
     end
 
     build_app(
@@ -180,7 +198,15 @@ platform :ios do
       configuration: "Release",
       export_method: "app-store",
       output_directory: "build/ios",
-      output_name: "release.ipa"
+      output_name: "release.ipa",
+      export_options: {
+        method: "app-store",
+        teamID: ENV['APPLE_TEAM_ID'],
+        signingStyle: "automatic",
+        uploadBitcode: false,
+        uploadSymbols: true,
+        compileBitcode: false
+      }
     )
   end
 

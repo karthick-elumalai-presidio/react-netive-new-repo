@@ -89,37 +89,29 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile || bun install
 
-      - name: Backup Fastlane config
+      - name: Verify Android native project exists
         run: |
-          mkdir -p /tmp/android-fastlane-backup
-          cp -r android/fastlane /tmp/android-fastlane-backup/ || true
-          cp android/Gemfile /tmp/android-fastlane-backup/ || true
-          cp android/Gemfile.lock /tmp/android-fastlane-backup/ || true
-
-      - name: Expo prebuild (generate Android native project)
-        run: |
+          echo "🔍 Verifying Android native project..."
           if [ ! -f "android/gradlew" ]; then
-            echo "Running expo prebuild for Android..."
-            bun run prebuild --platform android --clean
-            
-            # Verify prebuild succeeded
-            if [ ! -f "android/gradlew" ]; then
-              echo "❌ ERROR: Prebuild failed to generate Android project"
-              exit 1
-            fi
-            echo "✅ Android project generated successfully"
-          else
-            echo "Android gradle wrapper exists, skipping prebuild"
+            echo "❌ ERROR: Android native project not found!"
+            echo "❌ Missing: android/gradlew"
+            echo ""
+            echo "📋 To fix this, run locally:"
+            echo "   bun run prebuild --platform android --clean"
+            echo "   git add android/"
+            echo "   git commit -m 'chore: add android native project'"
+            echo "   git push"
+            exit 1
           fi
-
-      - name: Restore Fastlane config
-        run: |
-          if [ -d "/tmp/android-fastlane-backup/fastlane" ]; then
-            echo "Restoring custom Fastlane configuration..."
-            cp -r /tmp/android-fastlane-backup/fastlane android/
-            cp /tmp/android-fastlane-backup/Gemfile android/ || true
-            cp /tmp/android-fastlane-backup/Gemfile.lock android/ || true
+          
+          if [ ! -f "android/build.gradle" ]; then
+            echo "❌ ERROR: android/build.gradle not found!"
+            exit 1
           fi
+          
+          echo "✅ Android native project verified"
+          echo "   - android/gradlew exists"
+          echo "   - android/build.gradle exists"
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -236,7 +228,7 @@ jobs:
     needs: validate
     timeout-minutes: 45
     env:
-      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && secrets.MATCH_GIT_URL != '' && secrets.MATCH_PASSWORD != '' }}
+      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && (secrets.APP_STORE_CONNECT_API_KEY_JSON != '' || secrets.APPLE_ID != '') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -265,6 +257,30 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile || bun install
 
+      - name: Verify iOS native project exists
+        run: |
+          echo "🔍 Verifying iOS native project..."
+          if [ ! -d "ios/CbMmobileapp.xcodeproj" ]; then
+            echo "❌ ERROR: iOS native project not found!"
+            echo "❌ Missing: ios/CbMmobileapp.xcodeproj"
+            echo ""
+            echo "📋 To fix this, run locally:"
+            echo "   bun run prebuild --platform ios --clean"
+            echo "   git add ios/"
+            echo "   git commit -m 'chore: add ios native project'"
+            echo "   git push"
+            exit 1
+          fi
+          
+          if [ ! -f "ios/Podfile" ]; then
+            echo "❌ ERROR: ios/Podfile not found!"
+            exit 1
+          fi
+          
+          echo "✅ iOS native project verified"
+          echo "   - ios/CbMmobileapp.xcodeproj exists"
+          echo "   - ios/Podfile exists"
+
       - name: Cache CocoaPods
         uses: actions/cache@v4
         with:
@@ -275,38 +291,6 @@ jobs:
           key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock', 'ios/Podfile') }}
           restore-keys: |
             ${{ runner.os }}-pods-
-
-      - name: Backup Fastlane config (iOS)
-        run: |
-          mkdir -p /tmp/ios-fastlane-backup
-          cp -r ios/fastlane /tmp/ios-fastlane-backup/ || true
-          cp ios/Gemfile /tmp/ios-fastlane-backup/ || true
-          cp ios/Gemfile.lock /tmp/ios-fastlane-backup/ || true
-
-      - name: Expo prebuild (generate iOS native project)
-        run: |
-          if [ ! -d "ios/CbMmobileapp.xcworkspace" ] && [ ! -d "ios/CbMmobileapp.xcodeproj" ]; then
-            echo "Running expo prebuild for iOS..."
-            bun run prebuild --platform ios --clean
-            
-            # Verify prebuild succeeded (project should exist, workspace created later by pod install)
-            if [ ! -d "ios/CbMmobileapp.xcodeproj" ]; then
-              echo "❌ ERROR: Prebuild failed to generate iOS project"
-              exit 1
-            fi
-            echo "✅ iOS project generated successfully"
-          else
-            echo "iOS project exists, skipping prebuild"
-          fi
-
-      - name: Restore Fastlane config (iOS)
-        run: |
-          if [ -d "/tmp/ios-fastlane-backup/fastlane" ]; then
-            echo "Restoring custom Fastlane configuration..."
-            cp -r /tmp/ios-fastlane-backup/fastlane ios/
-            cp /tmp/ios-fastlane-backup/Gemfile ios/ || true
-            cp /tmp/ios-fastlane-backup/Gemfile.lock ios/ || true
-          fi
 
       - name: Install CocoaPods dependencies
         working-directory: ios
@@ -354,21 +338,21 @@ jobs:
           FASTLANE_OPT_OUT_USAGE: true
           FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: 180
           FASTLANE_XCODE_LIST_TIMEOUT: 180
-          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
           echo "PWD: $(pwd)" && ls -la && echo "--- fastlane dir ---" && ls -la fastlane || true
-          echo "⚠️  Note: iOS build requires valid SSH access to Match certificates repository"
-          echo "⚠️  If Match fails, the build will be skipped (not a failure)"
-          echo "🚀 Optimizing iOS build with faster settings..."
+          echo "🚀 Building iOS IPA with automatic code signing..."
+          echo "📋 Using APPLE_TEAM_ID for automatic signing"
+          
           if [ -f Gemfile ]; then
             echo "Running fastlane with bundler (iOS)"
-            bundle exec fastlane build_appstore_ipa || echo "iOS build skipped due to signing issues"
+            bundle exec fastlane build_appstore_ipa || echo "⚠️  iOS build failed - check logs above"
           else
             echo "No Gemfile detected; running fastlane directly (iOS)"
-            fastlane build_appstore_ipa || echo "iOS build skipped due to signing issues"
+            fastlane build_appstore_ipa || echo "⚠️  iOS build failed - check logs above"
           fi
 
       - name: iOS build status
@@ -376,20 +360,31 @@ jobs:
         run: |
           if [ -f "ios/build/ios/release.ipa" ]; then
             echo "✅ iOS build successful - IPA created"
+            ls -lh ios/build/ios/release.ipa
           else
-            echo "⚠️  iOS build was skipped (likely due to signing configuration)"
-            echo "This is not a failure - it means certificates couldn't be synced"
-            echo "To enable iOS builds, you need to:"
-            echo "  1. Configure SSH deploy key for Match repository in GitHub Actions"
-            echo "  2. OR use HTTPS with personal access token"
-            echo "  3. OR use App Store Connect API key authentication"
+            echo "⚠️  iOS build failed or was skipped"
+            echo "Check the build logs above for errors"
+            echo ""
+            echo "Common issues:"
+            echo "  1. Signing certificates not available in automatic signing"
+            echo "  2. Bundle identifier mismatch"
+            echo "  3. Provisioning profile issues"
+            echo ""
+            echo "Required secrets: APPLE_TEAM_ID + (APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD or APP_STORE_CONNECT_API_KEY_JSON)"
           fi
 
       - name: Skip iOS build (missing signing secrets)
         if: ${{ env.HAS_IOS_SIGNING != 'true' }}
         run: |
           echo "⚠️  Skipping iOS build: required signing secrets not configured"
-          echo "iOS builds require: MATCH_GIT_URL, MATCH_PASSWORD, APPLE_ID, APPLE_TEAM_ID"
+          echo ""
+          echo "iOS builds require:"
+          echo "  - APPLE_TEAM_ID (required)"
+          echo "  AND one of:"
+          echo "    - APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD"
+          echo "    - APP_STORE_CONNECT_API_KEY_JSON"
+          echo ""
+          echo "Add these secrets in: Settings → Secrets and variables → Actions"
 
       - name: Upload artifacts
         if: ${{ env.HAS_IOS_SIGNING == 'true' && hashFiles('ios/build/ios/*.ipa') != '' }}
@@ -444,7 +439,7 @@ jobs:
       FASTLANE_SKIP_UPDATE_CHECK: true
       FASTLANE_DISABLE_COLORS: true
       FASTLANE_OPT_OUT_USAGE: true
-      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && secrets.MATCH_GIT_URL != '' && secrets.MATCH_PASSWORD != '' }}
+      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && (secrets.APP_STORE_CONNECT_API_KEY_JSON != '' || secrets.APPLE_ID != '') }}
     steps:
       - name: Stop if any build failed
         if: ${{ needs.build_android.result == 'failure' || (needs.build_ios && needs.build_ios.result == 'failure') }}
@@ -497,6 +492,9 @@ jobs:
         if: ${{ env.HAS_IOS_SIGNING == 'true' }}
         working-directory: ios
         env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
           if [ -f Gemfile ]; then
@@ -562,6 +560,9 @@ jobs:
       - name: Upload iOS IPA to TestFlight
         working-directory: ios
         env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
           bundle install --path vendor/bundle
@@ -621,6 +622,9 @@ jobs:
       - name: Upload iOS IPA to App Store
         working-directory: ios
         env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
           bundle install --path vendor/bundle

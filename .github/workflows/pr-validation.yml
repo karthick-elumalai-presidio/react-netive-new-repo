@@ -81,38 +81,19 @@ jobs:
           echo " Running unit tests with coverage..."
           bun run test:coverage
 
-      # Backup and restore Fastlane configs
-      - name: Backup Fastlane config
+      # Verify native projects exist (should be committed to git)
+      - name: Verify Android native project exists
         run: |
-          mkdir -p /tmp/android-fastlane-backup
-          cp -r android/fastlane /tmp/android-fastlane-backup/ || true
-          cp android/Gemfile /tmp/android-fastlane-backup/ || true
-          cp android/Gemfile.lock /tmp/android-fastlane-backup/ || true
-
-      - name: Expo prebuild (generate Android native project)
-        run: |
+          echo "🔍 Verifying Android native project..."
           if [ ! -f "android/gradlew" ]; then
-            echo "Running expo prebuild for Android..."
-            bun run prebuild --platform android --clean
-            
-            # Verify prebuild succeeded
-            if [ ! -f "android/gradlew" ]; then
-              echo "❌ ERROR: Prebuild failed to generate Android project"
-              exit 1
-            fi
-            echo "✅ Android project generated successfully"
-          else
-            echo "Android gradle wrapper exists, skipping prebuild"
+            echo "❌ ERROR: Android native project not found!"
+            echo "❌ Missing: android/gradlew"
+            echo ""
+            echo "📋 The native android/ folder should be committed to git"
+            echo "   If missing, run: bun run prebuild --platform android --clean"
+            exit 1
           fi
-
-      - name: Restore Fastlane config
-        run: |
-          if [ -d "/tmp/android-fastlane-backup/fastlane" ]; then
-            echo "Restoring custom Fastlane configuration..."
-            cp -r /tmp/android-fastlane-backup/fastlane android/
-            cp /tmp/android-fastlane-backup/Gemfile android/ || true
-            cp /tmp/android-fastlane-backup/Gemfile.lock android/ || true
-          fi
+          echo "✅ Android native project verified"
 
       # Android Build Check
       - name: Setup Java for Android
