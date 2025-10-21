@@ -107,6 +107,14 @@ jobs:
             echo "🔨 Running: expo prebuild --platform android --clean"
             bun run prebuild --platform android --clean
             
+            # FORCE newArchEnabled=false in gradle.properties
+            echo "🔧 Forcing newArchEnabled=false in gradle.properties..."
+            if ! grep -q "newArchEnabled=false" android/gradle.properties; then
+              echo "" >> android/gradle.properties
+              echo "# Disable New Architecture (fixes autolinking C++ errors)" >> android/gradle.properties
+              echo "newArchEnabled=false" >> android/gradle.properties
+            fi
+            
             # Restore Fastlane config
             if [ -d "/tmp/android-fastlane-backup/fastlane" ]; then
               echo "📦 Restoring Fastlane configuration..."
@@ -175,6 +183,19 @@ jobs:
           rm -rf build
           echo "✅ Autolinking cache cleaned - will regenerate with newArchEnabled=false"
 
+      - name: Verify newArchEnabled=false
+        working-directory: android
+        run: |
+          echo "🔍 Verifying New Architecture is disabled..."
+          if grep -q "newArchEnabled=false" gradle.properties; then
+            echo "✅ newArchEnabled=false is set in gradle.properties"
+          else
+            echo "❌ ERROR: newArchEnabled=false NOT found in gradle.properties"
+            echo "Contents of gradle.properties:"
+            cat gradle.properties
+            exit 1
+          fi
+
       - name: Build Android release (AAB/APK)
         working-directory: android
         env:
@@ -182,6 +203,7 @@ jobs:
           FASTLANE_SKIP_UPDATE_CHECK: true
           FASTLANE_DISABLE_COLORS: true
           FASTLANE_OPT_OUT_USAGE: true
+          ORG_GRADLE_PROJECT_newArchEnabled: false
         run: |
           echo "🚀 Building Android release (AAB/APK)..."
           if [ -f Gemfile ]; then
