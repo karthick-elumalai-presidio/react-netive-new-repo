@@ -103,9 +103,9 @@ jobs:
               cp android/Gemfile.lock /tmp/android-fastlane-backup/ 2>/dev/null || true
             fi
             
-            # Generate with expo prebuild
-            echo "🔨 Running: expo prebuild --platform android --clean"
-            bun run prebuild --platform android --clean
+            # Generate with expo prebuild (skip dependency prompt in CI)
+            echo "🔨 Running: expo prebuild --platform android --clean --skip-dependency-update"
+            bun run prebuild --platform android --clean --skip-dependency-update
             
             # FORCE newArchEnabled=false in gradle.properties
             echo "🔧 Forcing newArchEnabled=false in gradle.properties..."
@@ -298,9 +298,9 @@ jobs:
               cp ios/Gemfile.lock /tmp/ios-fastlane-backup/ 2>/dev/null || true
             fi
             
-            # Generate with expo prebuild
-            echo "🔨 Running: expo prebuild --platform ios --clean"
-            bun run prebuild --platform ios --clean
+            # Generate with expo prebuild (skip dependency prompt in CI)
+            echo "🔨 Running: expo prebuild --platform ios --clean --skip-dependency-update"
+            bun run prebuild --platform ios --clean --skip-dependency-update
             
             # Restore Fastlane config
             if [ -d "/tmp/ios-fastlane-backup/fastlane" ]; then
