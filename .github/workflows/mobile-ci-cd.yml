@@ -151,23 +151,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Configure Gradle for CI
-        working-directory: android
-        run: |
-          echo "Configuring Gradle properties for CI optimization..."
-          cat >> gradle.properties << 'EOF'
-
-          # CI-specific optimizations
-          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+HeapDumpOnOutOfMemoryError
-          org.gradle.parallel=true
-          org.gradle.daemon=false
-          org.gradle.caching=true
-          org.gradle.workers.max=4
-          android.enableJetifier=true
-          android.useAndroidX=true
-          EOF
-          echo "✅ Gradle configured for CI"
-
       - name: Install Fastlane deps (Android)
         working-directory: android
         run: |
@@ -189,17 +172,13 @@ jobs:
           FASTLANE_SKIP_UPDATE_CHECK: true
           FASTLANE_DISABLE_COLORS: true
           FASTLANE_OPT_OUT_USAGE: true
-          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.workers.max=4 -Dorg.gradle.jvmargs="-Xmx4g -XX:+HeapDumpOnOutOfMemoryError"
         run: |
-          echo "PWD: $(pwd)" && ls -la && echo "--- fastlane dir ---" && ls -la fastlane || true
-          echo " Optimizing Gradle build with parallel execution..."
+          echo "🚀 Building Android release (AAB/APK)..."
           if [ -f Gemfile ]; then
             echo "Running fastlane with bundler"
-            bundle exec fastlane --version || true
-            bundle exec fastlane build_release || fastlane build_release
+            bundle exec fastlane build_release
           else
             echo "No Gemfile detected; running fastlane directly"
-            fastlane --version || true
             fastlane build_release
           fi
 
