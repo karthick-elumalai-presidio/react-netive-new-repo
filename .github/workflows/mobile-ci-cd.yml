@@ -130,7 +130,6 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
           working-directory: android
 
       - name: Setup Java
@@ -173,8 +172,11 @@ jobs:
         working-directory: android
         run: |
           if [ -f Gemfile ]; then
+            echo "📦 Installing Fastlane dependencies..."
             bundle config set --local path 'vendor/bundle'
+            bundle config set --local deployment 'false'
             bundle install --jobs 4 --retry 3
+            echo "✅ Fastlane dependencies installed"
           else
             echo "No Gemfile found; installing fastlane gem globally"
             gem install fastlane --no-document
@@ -338,15 +340,17 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
           working-directory: ios
 
       - name: Install Fastlane deps (iOS)
         working-directory: ios
         run: |
           if [ -f Gemfile ]; then
+            echo "📦 Installing Fastlane dependencies..."
             bundle config set --local path 'vendor/bundle'
+            bundle config set --local deployment 'false'
             bundle install --jobs 4 --retry 3
+            echo "✅ Fastlane dependencies installed"
           else
             echo "No Gemfile found; installing fastlane gem globally"
             gem install fastlane --no-document
@@ -486,7 +490,6 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
           working-directory: android
 
       - name: Deploy Android to Internal track
@@ -494,6 +497,7 @@ jobs:
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
+          bundle config set --local deployment 'false'
           bundle install --path vendor/bundle
           # Use the already built artifacts
           bundle exec fastlane deploy_beta
@@ -511,7 +515,6 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
           working-directory: ios
 
       - name: Upload iOS IPA to TestFlight (Development)
@@ -525,6 +528,7 @@ jobs:
         run: |
           if [ -f Gemfile ]; then
             bundle config set --local path 'vendor/bundle'
+            bundle config set --local deployment 'false'
             bundle install --jobs 4 --retry 3
             bundle exec fastlane upload_testflight_ipa ipa:../ios-artifacts/release.ipa || bundle exec fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
           else
@@ -565,7 +569,6 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
           working-directory: android
 
       - name: Deploy Android to Internal track
@@ -573,6 +576,7 @@ jobs:
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
+          bundle config set --local deployment 'false'
           bundle install --path vendor/bundle
           bundle exec fastlane deploy_beta
 
@@ -580,7 +584,6 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
           working-directory: ios
 
       - name: Upload iOS IPA to TestFlight
@@ -591,6 +594,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
+          bundle config set --local deployment 'false'
           bundle install --path vendor/bundle
           bundle exec fastlane upload_testflight_ipa ipa:../ios-artifacts/release.ipa || bundle exec fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
 
@@ -627,7 +631,6 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
           working-directory: android
 
       - name: Deploy Android to Production
@@ -635,6 +638,7 @@ jobs:
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
+          bundle config set --local deployment 'false'
           bundle install --path vendor/bundle
           bundle exec fastlane deploy_production
 
@@ -642,7 +646,6 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: true
           working-directory: ios
 
       - name: Upload iOS IPA to App Store
@@ -653,5 +656,6 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
+          bundle config set --local deployment 'false'
           bundle install --path vendor/bundle
           bundle exec fastlane upload_appstore_ipa ipa:../ios-artifacts/release.ipa || bundle exec fastlane upload_appstore_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
