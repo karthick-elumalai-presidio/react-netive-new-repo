@@ -180,11 +180,14 @@ platform :ios do
       UI.success("✅ Using automatic code signing with Team ID: #{ENV['APPLE_TEAM_ID']}")
       
       # Update project to use automatic signing
-      # DON'T specify code_sign_identity when using automatic signing
+      # Explicitly set code_sign_identity to empty string to clear any manual settings
       update_code_signing_settings(
         path: "CbMmobileapp.xcodeproj",
         use_automatic_signing: true,
-        team_id: ENV['APPLE_TEAM_ID']
+        team_id: ENV['APPLE_TEAM_ID'],
+        code_sign_identity: "",  # Clear any manual identity
+        targets: ["CbMmobileapp"],
+        build_configurations: ["Release"]
       )
     else
       UI.error("❌ APPLE_TEAM_ID not set - automatic signing will fail")
