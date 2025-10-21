@@ -12,14 +12,14 @@ echo "📋 Checking for native project files..."
 if [ ! -f "android/build.gradle" ]; then
   echo "❌ ERROR: android/build.gradle not found!"
   echo "   Run this after CI generates the folders, or run:"
-  echo "   npx expo prebuild --platform android --clean --skip-dependency-update"
+  echo "   npx expo prebuild --platform android --clean"
   exit 1
 fi
 
 if [ ! -f "ios/Podfile" ]; then
   echo "❌ ERROR: ios/Podfile not found!"
   echo "   Run this after CI generates the folders, or run:"
-  echo "   npx expo prebuild --platform ios --clean --skip-dependency-update"
+  echo "   npx expo prebuild --platform ios --clean"
   exit 1
 fi
 
@@ -57,8 +57,8 @@ Benefits:
 - ✅ Full control over native code
 
 Generated using:
-- expo prebuild --platform android --clean --skip-dependency-update
-- expo prebuild --platform ios --clean --skip-dependency-update
+- expo prebuild --platform android --clean
+- expo prebuild --platform ios --clean
 
 The workflow will automatically detect these folders and skip generation."
   

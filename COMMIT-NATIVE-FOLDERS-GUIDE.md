@@ -26,7 +26,7 @@ Commit the `ios/` and `android/` folders to the repository so **CI builds skip `
 
 3. **Generate** native folders:
    ```bash
-   npx expo prebuild --clean --skip-dependency-update
+   npx expo prebuild --clean
    ```
    
 4. **Run** the commit script:
@@ -59,7 +59,7 @@ After Build #68 succeeds, add this job to the workflow to auto-commit:
       
       - name: Generate native folders
         run: |
-          npx expo prebuild --clean --skip-dependency-update
+          npx expo prebuild --clean
       
       - name: Commit and push
         run: |
