@@ -165,14 +165,15 @@ jobs:
             gem install fastlane --no-document
           fi
 
-      - name: Clean Android build cache
+      - name: Clean Android autolinking cache
         working-directory: android
         run: |
-          echo "🧹 Cleaning Android build cache and generated files..."
-          ./gradlew clean
+          echo "🧹 Cleaning Android autolinking cache..."
           rm -rf app/build/generated/autolinking
           rm -rf app/.cxx
-          echo "✅ Build cache cleaned"
+          rm -rf .gradle
+          rm -rf build
+          echo "✅ Autolinking cache cleaned - will regenerate with newArchEnabled=false"
 
       - name: Build Android release (AAB/APK)
         working-directory: android
