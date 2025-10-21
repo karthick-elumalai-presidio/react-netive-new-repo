@@ -362,6 +362,9 @@ jobs:
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
           echo "🔐 Importing iOS Distribution Certificate..."
           
@@ -375,15 +378,41 @@ jobs:
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           echo "$CSC_LINK" | base64 --decode > $CERTIFICATE_PATH
           
-          # Import into login keychain (Fastlane will use this)
-          security import $CERTIFICATE_PATH -P "$CSC_KEY_PASSWORD" -A -t cert -f pkcs12
-          security set-key-partition-list -S apple-tool:,apple: -k "" ~/Library/Keychains/login.keychain-db
+          # Unlock the login keychain first
+          security unlock-keychain -p "" ~/Library/Keychains/login.keychain-db 2>/dev/null || true
           
-          echo "✅ Certificate imported successfully into login keychain"
+          # Import into login keychain with all permissions
+          security import $CERTIFICATE_PATH -P "$CSC_KEY_PASSWORD" -A -t cert -f pkcs12 -k ~/Library/Keychains/login.keychain-db
           
-          # Verify certificate
-          echo "📋 Available signing identities:"
-          security find-identity -v -p codesigning ~/Library/Keychains/login.keychain-db
+          # Allow codesign to access the certificate without prompting
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" ~/Library/Keychains/login.keychain-db
+          
+          # Set the keychain in the search list
+          security list-keychains -d user -s ~/Library/Keychains/login.keychain-db
+          
+          # Set as default keychain
+          security default-keychain -s ~/Library/Keychains/login.keychain-db
+          
+          echo "✅ Certificate imported successfully"
+          
+          # Verify certificate with detailed info
+          echo "📋 Checking for valid code signing identities:"
+          security find-identity -v -p codesigning
+          
+          echo ""
+          echo "📋 Checking certificate details:"
+          security find-certificate -a -c "Apple Distribution" -p | openssl x509 -text | grep -A 2 "Subject:" || echo "No Apple Distribution certificate found"
+          
+          # Authenticate with Apple for provisioning profiles (if credentials provided)
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
+            echo ""
+            echo "🔑 Setting up App Store authentication..."
+            # Store credentials for xcodebuild to use
+            xcrun notarytool store-credentials "AC_PASSWORD" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" 2>/dev/null || echo "⚠️  Could not store credentials (non-critical)"
+          fi
 
       - name: Build iOS App Store IPA
         if: ${{ env.HAS_IOS_SIGNING == 'true' }}
@@ -399,14 +428,25 @@ jobs:
           FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: 180
           FASTLANE_XCODE_LIST_TIMEOUT: 180
           APPLE_ID: ${{ secrets.APPLE_ID }}
+          FASTLANE_USER: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          FASTLANE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
           echo "PWD: $(pwd)" && ls -la && echo "--- fastlane dir ---" && ls -la fastlane || true
           echo "🚀 Building iOS IPA with automatic code signing..."
           echo "📋 Using APPLE_TEAM_ID for automatic signing"
           
+          echo ""
+          echo "🔍 Pre-build verification:"
+          echo "- Checking code signing identities:"
+          security find-identity -v -p codesigning
+          echo "- Keychain search list:"
+          security list-keychains -d user
+          
+          echo ""
           if [ -f Gemfile ]; then
             echo "Running fastlane with bundler (iOS)"
             bundle exec fastlane build_appstore_ipa || echo "⚠️  iOS build failed - check logs above"
