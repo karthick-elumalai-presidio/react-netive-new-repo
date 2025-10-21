@@ -82,9 +82,9 @@ jobs:
           path: |
             ~/.bun/install/cache
             node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          key: v2-${{ runner.os }}-bun-${{ hashFiles('**/package.json', '**/bun.lockb') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            v2-${{ runner.os }}-bun-
 
       - name: Install JS dependencies
         run: bun install --frozen-lockfile || bun install
@@ -155,9 +155,9 @@ jobs:
             ~/.gradle/native
             android/.gradle
             android/app/build
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'android/gradle.properties') }}
+          key: v2-${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'android/gradle.properties') }}
           restore-keys: |
-            ${{ runner.os }}-gradle-
+            v2-${{ runner.os }}-gradle-
 
       - name: Install Fastlane deps (Android)
         working-directory: android
@@ -277,9 +277,9 @@ jobs:
           path: |
             ~/.bun/install/cache
             node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          key: v2-${{ runner.os }}-bun-${{ hashFiles('**/package.json', '**/bun.lockb') }}
           restore-keys: |
-            ${{ runner.os }}-bun-
+            v2-${{ runner.os }}-bun-
 
       - name: Install JS dependencies
         run: bun install --frozen-lockfile || bun install
@@ -328,9 +328,9 @@ jobs:
             ios/Pods
             ~/Library/Caches/CocoaPods
             ~/.cocoapods
-          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock', 'ios/Podfile') }}
+          key: v2-${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock', 'ios/Podfile', 'package.json') }}
           restore-keys: |
-            ${{ runner.os }}-pods-
+            v2-${{ runner.os }}-pods-
 
       - name: Install CocoaPods dependencies
         working-directory: ios
