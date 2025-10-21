@@ -89,50 +89,23 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile || bun install
 
-      - name: Generate Android native project if needed
+      - name: Verify Android native project exists
         run: |
           echo "🔍 Checking for Android native project..."
           if [ ! -f "android/gradlew" ] || [ ! -f "android/build.gradle" ]; then
-            echo "⚠️  Android native project not found - generating now..."
-            
-            # Backup Fastlane config
-            if [ -d "android/fastlane" ]; then
-              mkdir -p /tmp/android-fastlane-backup
-              cp -r android/fastlane /tmp/android-fastlane-backup/ 2>/dev/null || true
-              cp android/Gemfile /tmp/android-fastlane-backup/ 2>/dev/null || true
-              cp android/Gemfile.lock /tmp/android-fastlane-backup/ 2>/dev/null || true
-            fi
-            
-            # Generate with expo prebuild (use existing node_modules)
-            echo "🔨 Running: expo prebuild --platform android --clean"
-            bun run prebuild --platform android --clean
-            
-            # FORCE newArchEnabled=false in gradle.properties
-            echo "🔧 Forcing newArchEnabled=false in gradle.properties..."
-            if ! grep -q "newArchEnabled=false" android/gradle.properties; then
-              echo "" >> android/gradle.properties
-              echo "# Disable New Architecture (fixes autolinking C++ errors)" >> android/gradle.properties
-              echo "newArchEnabled=false" >> android/gradle.properties
-            fi
-            
-            # Restore Fastlane config
-            if [ -d "/tmp/android-fastlane-backup/fastlane" ]; then
-              echo "📦 Restoring Fastlane configuration..."
-              cp -r /tmp/android-fastlane-backup/fastlane android/
-              cp /tmp/android-fastlane-backup/Gemfile android/ 2>/dev/null || true
-              cp /tmp/android-fastlane-backup/Gemfile.lock android/ 2>/dev/null || true
-            fi
-            
-            # Verify success
-            if [ ! -f "android/gradlew" ]; then
-              echo "❌ ERROR: Failed to generate Android project"
-              exit 1
-            fi
-            
-            echo "✅ Android project generated successfully"
-          else
-            echo "✅ Android native project found (fast path - no prebuild needed)"
+            echo "❌ ERROR: Android native project not found!"
+            echo ""
+            echo "📋 The android/ folder must be committed to the repository."
+            echo "   This ensures fast, reliable CI builds."
+            echo ""
+            echo "To fix this:"
+            echo "  1. Run locally: npx expo prebuild --platform android --clean"
+            echo "  2. Run: ./commit-native-folders.sh"
+            echo "  3. Or see: COMMIT-NATIVE-FOLDERS-GUIDE.md"
+            echo ""
+            exit 1
           fi
+          echo "✅ Android native project found"
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -284,42 +257,23 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile || bun install
 
-      - name: Generate iOS native project if needed
+      - name: Verify iOS native project exists
         run: |
           echo "🔍 Checking for iOS native project..."
           if [ ! -d "ios/CbMmobileapp.xcodeproj" ] || [ ! -f "ios/Podfile" ]; then
-            echo "⚠️  iOS native project not found - generating now..."
-            
-            # Backup Fastlane config
-            if [ -d "ios/fastlane" ]; then
-              mkdir -p /tmp/ios-fastlane-backup
-              cp -r ios/fastlane /tmp/ios-fastlane-backup/ 2>/dev/null || true
-              cp ios/Gemfile /tmp/ios-fastlane-backup/ 2>/dev/null || true
-              cp ios/Gemfile.lock /tmp/ios-fastlane-backup/ 2>/dev/null || true
-            fi
-            
-            # Generate with expo prebuild (use existing node_modules)
-            echo "🔨 Running: expo prebuild --platform ios --clean"
-            bun run prebuild --platform ios --clean
-            
-            # Restore Fastlane config
-            if [ -d "/tmp/ios-fastlane-backup/fastlane" ]; then
-              echo "📦 Restoring Fastlane configuration..."
-              cp -r /tmp/ios-fastlane-backup/fastlane ios/
-              cp /tmp/ios-fastlane-backup/Gemfile ios/ 2>/dev/null || true
-              cp /tmp/ios-fastlane-backup/Gemfile.lock ios/ 2>/dev/null || true
-            fi
-            
-            # Verify success
-            if [ ! -d "ios/CbMmobileapp.xcodeproj" ]; then
-              echo "❌ ERROR: Failed to generate iOS project"
-              exit 1
-            fi
-            
-            echo "✅ iOS project generated successfully"
-          else
-            echo "✅ iOS native project found (fast path - no prebuild needed)"
+            echo "❌ ERROR: iOS native project not found!"
+            echo ""
+            echo "📋 The ios/ folder must be committed to the repository."
+            echo "   This ensures fast, reliable CI builds."
+            echo ""
+            echo "To fix this:"
+            echo "  1. Run locally: npx expo prebuild --platform ios --clean"
+            echo "  2. Run: ./commit-native-folders.sh"
+            echo "  3. Or see: COMMIT-NATIVE-FOLDERS-GUIDE.md"
+            echo ""
+            exit 1
           fi
+          echo "✅ iOS native project found"
 
       - name: Cache CocoaPods
         uses: actions/cache@v4
