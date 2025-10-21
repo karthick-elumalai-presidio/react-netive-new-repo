@@ -358,12 +358,18 @@ jobs:
           fi
 
       - name: Import iOS Distribution Certificate
-        if: ${{ env.HAS_IOS_SIGNING == 'true' && secrets.CSC_LINK != '' }}
+        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: |
           echo "🔐 Importing iOS Distribution Certificate..."
+          
+          # Check if CSC_LINK is set
+          if [ -z "$CSC_LINK" ]; then
+            echo "⚠️  CSC_LINK not set, skipping certificate import"
+            exit 0
+          fi
           
           # Create temporary certificate file
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
