@@ -378,36 +378,35 @@ jobs:
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           echo "$CSC_LINK" | base64 --decode > $CERTIFICATE_PATH
           
-          # Unlock the login keychain first
-          security unlock-keychain -p "" ~/Library/Keychains/login.keychain-db 2>/dev/null || true
+          # Create a temporary keychain with a known password
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
           
-          # Import into login keychain with all permissions
-          security import $CERTIFICATE_PATH -P "$CSC_KEY_PASSWORD" -A -t cert -f pkcs12 -k ~/Library/Keychains/login.keychain-db
+          # Create and configure keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           
-          # Allow codesign to access the certificate without prompting
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" ~/Library/Keychains/login.keychain-db
+          # Import certificate into temporary keychain
+          security import $CERTIFICATE_PATH -P "$CSC_KEY_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
           
-          # Set the keychain in the search list
-          security list-keychains -d user -s ~/Library/Keychains/login.keychain-db
+          # Allow all apps to access the certificate
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           
-          # Set as default keychain
-          security default-keychain -s ~/Library/Keychains/login.keychain-db
+          # Add to keychain search list and set as default
+          security list-keychains -d user -s $KEYCHAIN_PATH $(security list-keychains -d user | sed s/\"//g)
+          security default-keychain -s $KEYCHAIN_PATH
           
-          echo "✅ Certificate imported successfully"
+          echo "✅ Certificate imported successfully into temporary keychain"
           
-          # Verify certificate with detailed info
-          echo "📋 Checking for valid code signing identities:"
-          security find-identity -v -p codesigning
-          
-          echo ""
-          echo "📋 Checking certificate details:"
-          security find-certificate -a -c "Apple Distribution" -p | openssl x509 -text | grep -A 2 "Subject:" || echo "No Apple Distribution certificate found"
+          # Verify certificate
+          echo "📋 Available signing identities:"
+          security find-identity -v -p codesigning $KEYCHAIN_PATH
           
           # Authenticate with Apple for provisioning profiles (if credentials provided)
           if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
             echo ""
             echo "🔑 Setting up App Store authentication..."
-            # Store credentials for xcodebuild to use
             xcrun notarytool store-credentials "AC_PASSWORD" \
               --apple-id "$APPLE_ID" \
               --team-id "$APPLE_TEAM_ID" \
