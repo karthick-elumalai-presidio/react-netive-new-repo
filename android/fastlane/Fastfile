@@ -33,16 +33,7 @@ platform :android do
   lane :build_release do
     gradle(
       task: "bundleRelease assembleRelease",
-      project_dir: ".",
-      properties: {
-        "org.gradle.jvmargs" => "-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+HeapDumpOnOutOfMemoryError",
-        "org.gradle.parallel" => "true",
-        "org.gradle.daemon" => "false",
-        "org.gradle.caching" => "true",
-        "android.enableJetifier" => "true",
-        "android.useAndroidX" => "true"
-      },
-      flags: "--no-daemon --parallel --max-workers=4"
+      project_dir: "."
     )
   end
 
