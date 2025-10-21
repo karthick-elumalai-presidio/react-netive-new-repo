@@ -244,7 +244,7 @@ jobs:
     timeout-minutes: 45
     continue-on-error: true
     env:
-      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && (secrets.APP_STORE_CONNECT_API_KEY_JSON != '' || secrets.APPLE_ID != '') }}
+      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && (secrets.CSC_LINK != '' || secrets.APP_STORE_CONNECT_API_KEY_JSON != '' || secrets.APPLE_ID != '') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -356,6 +356,38 @@ jobs:
             echo "No Gemfile found; installing fastlane gem globally"
             gem install fastlane --no-document
           fi
+
+      - name: Import iOS Distribution Certificate
+        if: ${{ env.HAS_IOS_SIGNING == 'true' && secrets.CSC_LINK != '' }}
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          echo "🔐 Importing iOS Distribution Certificate..."
+          
+          # Create temporary certificate file
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          echo "$CSC_LINK" | base64 --decode > $CERTIFICATE_PATH
+          
+          # Create temporary keychain
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          
+          # Create keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          
+          # Import certificate
+          security import $CERTIFICATE_PATH -P "$CSC_KEY_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          
+          echo "✅ Certificate imported successfully"
+          
+          # Verify certificate
+          echo "📋 Available signing identities:"
+          security find-identity -v -p codesigning $KEYCHAIN_PATH
 
       - name: Build iOS App Store IPA
         if: ${{ env.HAS_IOS_SIGNING == 'true' }}
