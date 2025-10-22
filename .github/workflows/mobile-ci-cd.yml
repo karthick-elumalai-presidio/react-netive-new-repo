@@ -194,7 +194,47 @@ jobs:
           npm install ajv@^8.12.0 --save-dev --force
           npm install ajv-keywords@^5.1.0 --save-dev --force
           
+          # Fix expo-localization native module issue
+          echo "🔧 Fixing expo-localization native module..."
+          npm install expo-localization@~14.0.0 --force
+          
+          # Ensure all expo modules are properly installed
+          echo "🔧 Ensuring all expo modules are properly installed..."
+          npm install expo-constants@~16.0.0 --force
+          npm install expo-linear-gradient@~13.0.0 --force
+          npm install expo-linking@~6.3.0 --force
+          npm install expo-splash-screen@~0.27.0 --force
+          npm install expo-status-bar@~1.12.0 --force
+          npm install expo-system-ui@~3.0.0 --force
+          
           echo "✅ Dependencies cleaned and fixed"
+
+      - name: Verify expo modules installation
+        run: |
+          echo "🔍 Verifying expo modules installation..."
+          
+          # Check if expo-localization is properly installed
+          if [ ! -d "node_modules/expo-localization" ]; then
+            echo "❌ ERROR: expo-localization not found"
+            exit 1
+          fi
+          
+          # Check if ExpoLocalization native module exists
+          if [ ! -f "node_modules/expo-localization/build/ExpoLocalization.js" ]; then
+            echo "❌ ERROR: ExpoLocalization native module not found"
+            echo "🔧 Reinstalling expo-localization..."
+            npm install expo-localization@~14.0.0 --force
+          fi
+          
+          # Verify other critical expo modules
+          for module in expo-constants expo-linear-gradient expo-linking expo-splash-screen expo-status-bar expo-system-ui; do
+            if [ ! -d "node_modules/$module" ]; then
+              echo "❌ ERROR: $module not found"
+              exit 1
+            fi
+          done
+          
+          echo "✅ All expo modules verified"
 
       - name: Regenerate Android project for Expo SDK compatibility
         run: |
