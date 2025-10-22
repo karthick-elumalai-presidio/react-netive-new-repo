@@ -89,13 +89,29 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile || bun install
 
-      - name: Verify Android project exists
+      - name: Backup Fastlane config
+        run: |
+          mkdir -p /tmp/android-fastlane-backup
+          cp -r android/fastlane /tmp/android-fastlane-backup/ || true
+          cp android/Gemfile /tmp/android-fastlane-backup/ || true
+          cp android/Gemfile.lock /tmp/android-fastlane-backup/ || true
+
+      - name: Expo prebuild (generate Android native project)
         run: |
           if [ ! -f "android/gradlew" ]; then
-            echo "❌ Android project not found! Please run 'expo prebuild --platform android' locally first."
-            exit 1
+            echo "Running expo prebuild for Android..."
+            bun run prebuild --platform android --clean
           else
-            echo "✅ Android project found, proceeding with build"
+            echo "Android gradle wrapper exists, skipping prebuild"
+          fi
+
+      - name: Restore Fastlane config
+        run: |
+          if [ -d "/tmp/android-fastlane-backup/fastlane" ]; then
+            echo "Restoring custom Fastlane configuration..."
+            cp -r /tmp/android-fastlane-backup/fastlane android/
+            cp /tmp/android-fastlane-backup/Gemfile android/ || true
+            cp /tmp/android-fastlane-backup/Gemfile.lock android/ || true
           fi
 
       - name: Setup Ruby
