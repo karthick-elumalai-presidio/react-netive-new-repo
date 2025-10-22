@@ -50,14 +50,6 @@
     "zod": "^4.1.12",
     "zustand": "^4.5.1"
   },
-  "overrides": {
-    "expo-modules-core": "3.0.23",
-    "react-native": "0.76.3"
-  },
-  "resolutions": {
-    "expo-modules-core": "3.0.23",
-    "react-native": "0.76.3"
-  },
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "@tanstack/eslint-plugin-query": "^5.91.0",

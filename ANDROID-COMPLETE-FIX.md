@@ -43,21 +43,18 @@ react {
     "expo": "~54.0.0",
     "react-native": "0.76.3",  // Changed from 0.76.5
     // ... other dependencies
-  },
-  "overrides": {
-    "expo-modules-core": "3.0.23",
-    "react-native": "0.76.3"
-  },
-  "resolutions": {
-    "expo-modules-core": "3.0.23",
-    "react-native": "0.76.3"
   }
 }
 ```
 
+**What Changed:**
+- Downgraded React Native from **0.76.5** → **0.76.3**
+- Let Expo SDK 54 use its default `expo-modules-core` (3.0.22)
+
 **Why?** React Native 0.76.5 has breaking API changes that `expo-modules-core` 3.0.22 doesn't support:
-- Missing `enableBridgelessArchitecture` API
+- Missing/changed `enableBridgelessArchitecture` API
 - Changed `BoxShadow.parse()` signature
+- RN 0.76.3 is the last version fully compatible with Expo SDK 54
 
 ### Fix 4: Update CI/CD to Force Clean Install
 
@@ -80,12 +77,12 @@ These issues cascade from React Native 0.76's breaking changes:
 
 ## Verification
 
-After applying all fixes, you should see:
+After applying all fixes, you should see in the build logs:
 
 ```bash
 ✅ kotlin:      2.0.21
 ✅ ksp:         2.0.21-1.0.28
-✅ expo-modules-core: 3.0.23
+✅ expo-modules-core: 3.0.22 (from Expo SDK 54)
 ✅ react-native: 0.76.3
 ```
 
