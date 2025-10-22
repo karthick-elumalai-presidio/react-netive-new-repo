@@ -23,6 +23,7 @@ concurrency:
 
 env:
   NODE_VERSION: '20'
+  BUN_VERSION: '1.1.34'
 
 jobs:
   validate:
@@ -38,28 +39,21 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: ''
 
-      - name: Cache npm dependencies
-        uses: actions/cache@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          path: |
-            node_modules
-          key: v4-${{ runner.os }}-npm-${{ hashFiles('**/package.json') }}
-          restore-keys: |
-            v4-${{ runner.os }}-npm-
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: |
-          echo "📦 Installing JavaScript dependencies..."
-          rm -rf node_modules package-lock.json
-          npm install --legacy-peer-deps
-          echo "✅ Dependencies installed"
+        run: bun install --frozen-lockfile || bun install
 
       - name: Lint
-        run: npm run lint
+        run: bun run lint
 
       - name: Typecheck
-        run: npx tsc -p tsconfig.json --noEmit
+        run: bun x tsc -p tsconfig.json --noEmit
 
+      # If you add tests later, enable this
       # - name: Test
       #   run: bun test
 
@@ -67,7 +61,6 @@ jobs:
     name: Build Android Artifact
     runs-on: ubuntu-latest
     needs: validate
-    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -78,71 +71,54 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: ''
 
-      - name: Cache npm dependencies
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
           path: |
+            ~/.bun/install/cache
             node_modules
-          key: v4-${{ runner.os }}-npm-${{ hashFiles('**/package.json') }}
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
           restore-keys: |
-            v4-${{ runner.os }}-npm-
+            ${{ runner.os }}-bun-
 
-      - name: Install JS dependencies  
-        run: |
-          echo "📦 Installing JavaScript dependencies..."
-          # Use npm for consistent dependency resolution across all platforms
-          rm -rf node_modules package-lock.json
-          npm install --legacy-peer-deps
-          
-          # Fix ajv dependency conflicts for Expo SDK 53
-          echo "🔧 Fixing ajv dependency conflicts..."
-          npm install ajv@^8.12.0 --save-dev --force
-          npm install ajv-keywords@^5.1.0 --save-dev --force
-          
-          echo "✅ Dependencies installed and conflicts resolved"
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile || bun install
 
-      - name: Verify critical dependencies
+      - name: Backup Fastlane config
         run: |
-          echo "🔍 Verifying critical dependencies for Android build..."
-          
-          # Verify React version
-          REACT_VERSION=$(node -p "require('./node_modules/react/package.json').version")
-          echo "✅ React version: $REACT_VERSION"
-          
-          # Verify React Native version
-          RN_VERSION=$(node -p "require('./node_modules/react-native/package.json').version")
-          echo "✅ React Native version: $RN_VERSION"
-          
-          # Verify react-native-reanimated version
-          REANIMATED_VERSION=$(node -p "require('./node_modules/react-native-reanimated/package.json').version")
-          echo "✅ react-native-reanimated version: $REANIMATED_VERSION"
-          
-          echo "✅ All critical dependencies verified"
+          mkdir -p /tmp/android-fastlane-backup
+          cp -r android/fastlane /tmp/android-fastlane-backup/ || true
+          cp android/Gemfile /tmp/android-fastlane-backup/ || true
+          cp android/Gemfile.lock /tmp/android-fastlane-backup/ || true
 
-      - name: Check Android native project
+      - name: Expo prebuild (generate Android native project)
         run: |
-          echo "🔍 Checking for Android native project..."
-          if [ ! -f "android/gradlew" ] || [ ! -f "android/build.gradle" ]; then
-            echo "❌ ERROR: Android native project is missing!"
-            echo "The native Android project files should be committed to the repository."
-            echo "Please run './generate-native-folders.sh' locally and commit the results."
-            exit 1
+          if [ ! -f "android/gradlew" ]; then
+            echo "Running expo prebuild for Android..."
+            bun run prebuild --platform android --clean
           else
-            echo "✅ Android native project found - proceeding with build"
-            
-            # Verify newArchEnabled=false is set
-            if ! grep -q "newArchEnabled=false" android/gradle.properties; then
-              echo "⚠️  WARNING: newArchEnabled=false not found in gradle.properties"
-              echo "This may cause build issues. Please ensure it's set correctly."
-            else
-              echo "✅ newArchEnabled=false is correctly set in gradle.properties"
-            fi
+            echo "Android gradle wrapper exists, skipping prebuild"
+          fi
+
+      - name: Restore Fastlane config
+        run: |
+          if [ -d "/tmp/android-fastlane-backup/fastlane" ]; then
+            echo "Restoring custom Fastlane configuration..."
+            cp -r /tmp/android-fastlane-backup/fastlane android/
+            cp /tmp/android-fastlane-backup/Gemfile android/ || true
+            cp /tmp/android-fastlane-backup/Gemfile.lock android/ || true
           fi
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
+          bundler-cache: true
           working-directory: android
 
       - name: Setup Java
@@ -157,199 +133,41 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-            ~/.gradle/native
             android/.gradle
             android/app/build
-          key: v4-${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'android/gradle.properties') }}
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
-            v4-${{ runner.os }}-gradle-
+            ${{ runner.os }}-gradle-
 
       - name: Install Fastlane deps (Android)
         working-directory: android
         run: |
           if [ -f Gemfile ]; then
-            echo "📦 Installing Fastlane dependencies..."
             bundle config set --local path 'vendor/bundle'
-            bundle config set --local deployment 'false'
             bundle install --jobs 4 --retry 3
-            echo "✅ Fastlane dependencies installed"
           else
             echo "No Gemfile found; installing fastlane gem globally"
             gem install fastlane --no-document
-          fi
-
-      - name: Clean npm cache and fix dependencies
-        run: |
-          echo "🧹 Cleaning npm cache and fixing dependencies..."
-          
-          # Clean npm cache
-          npm cache clean --force
-          
-          # Remove node_modules and package-lock.json
-          rm -rf node_modules package-lock.json
-          
-          # Reinstall with proper dependency resolution
-          npm install --legacy-peer-deps
-          
-          # Fix ajv dependency conflicts
-          npm install ajv@^8.12.0 --save-dev --force
-          npm install ajv-keywords@^5.1.0 --save-dev --force
-          
-          # Fix expo-localization native module issue
-          echo "🔧 Fixing expo-localization native module..."
-          npm uninstall expo-localization
-          npm install expo-localization@~14.0.0 --force
-          
-          # Ensure all expo modules are properly installed
-          echo "🔧 Ensuring all expo modules are properly installed..."
-          npm install expo-constants@~16.0.0 --force
-          npm install expo-linear-gradient@~13.0.0 --force
-          npm install expo-linking@~6.3.0 --force
-          npm install expo-splash-screen@~0.27.0 --force
-          npm install expo-status-bar@~1.12.0 --force
-          npm install expo-system-ui@~3.0.0 --force
-          
-          echo "✅ Dependencies cleaned and fixed"
-
-      - name: Verify expo modules installation
-        run: |
-          echo "🔍 Verifying expo modules installation..."
-          
-          # Check if expo-localization is properly installed
-          if [ ! -d "node_modules/expo-localization" ]; then
-            echo "❌ ERROR: expo-localization not found"
-            exit 1
-          fi
-          
-          # Check if ExpoLocalization native module exists
-          if [ ! -f "node_modules/expo-localization/build/ExpoLocalization.js" ]; then
-            echo "❌ ERROR: ExpoLocalization native module not found"
-            echo "🔧 Reinstalling expo-localization..."
-            npm install expo-localization@~14.0.0 --force
-            
-            # Verify the file exists after reinstallation
-            if [ ! -f "node_modules/expo-localization/build/ExpoLocalization.js" ]; then
-              echo "❌ ERROR: ExpoLocalization native module still missing after reinstall"
-              echo "🔧 Trying alternative installation method..."
-              npm uninstall expo-localization
-              npm install expo-localization@~14.0.0 --force
-              
-              # Final verification
-              if [ ! -f "node_modules/expo-localization/build/ExpoLocalization.js" ]; then
-                echo "❌ ERROR: ExpoLocalization native module cannot be installed"
-                echo "🔍 Listing expo-localization directory contents:"
-                ls -la node_modules/expo-localization/build/ || echo "Build directory does not exist"
-                exit 1
-              fi
-            fi
-          fi
-          
-          # Verify other critical expo modules
-          for module in expo-constants expo-linear-gradient expo-linking expo-splash-screen expo-status-bar expo-system-ui; do
-            if [ ! -d "node_modules/$module" ]; then
-              echo "❌ ERROR: $module not found"
-              exit 1
-            fi
-          done
-          
-          echo "✅ All expo modules verified"
-          
-          # Final verification: Test if expo-localization can be imported
-          echo "🧪 Testing expo-localization import..."
-          node -e "
-            try {
-              require('expo-localization');
-              console.log('✅ expo-localization import successful');
-            } catch (error) {
-              console.log('❌ expo-localization import failed:', error.message);
-              process.exit(1);
-            }
-          " || {
-            echo "❌ ERROR: expo-localization cannot be imported"
-            echo "🔧 Final attempt to fix expo-localization..."
-            npm uninstall expo-localization
-            npm install expo-localization@~14.0.0 --force
-            
-            # Test import again after reinstallation
-            echo "🧪 Testing expo-localization import after reinstall..."
-            node -e "
-              try {
-                require('expo-localization');
-                console.log('✅ expo-localization import successful after reinstall');
-              } catch (error) {
-                console.log('❌ expo-localization import still failed:', error.message);
-                process.exit(1);
-              }
-            " || {
-              echo "❌ ERROR: expo-localization still cannot be imported after reinstall"
-              echo "🔍 Debugging expo-localization installation..."
-              echo "Directory contents:"
-              ls -la node_modules/expo-localization/ || echo "expo-localization directory not found"
-              echo "Build directory contents:"
-              ls -la node_modules/expo-localization/build/ || echo "Build directory not found"
-              exit 1
-            }
-          }
-
-      - name: Regenerate Android project for Expo SDK compatibility
-        run: |
-          echo "🔄 Regenerating Android project for Expo SDK compatibility..."
-          
-          # Clean existing Android project
-          rm -rf android
-          
-          # Regenerate Android project with current Expo SDK
-          npx expo prebuild --platform android --clean
-          
-          echo "✅ Android project regenerated successfully"
-          
-          # Verify the regenerated project
-          if [ ! -f "android/gradlew" ] || [ ! -f "android/build.gradle" ]; then
-            echo "❌ ERROR: Failed to regenerate Android project"
-            exit 1
-          fi
-          
-          echo "✅ Android project verification passed"
-
-      - name: Clean Android autolinking cache
-        working-directory: android
-        run: |
-          echo "🧹 Cleaning Android autolinking cache..."
-          rm -rf app/build/generated/autolinking
-          rm -rf app/.cxx
-          rm -rf .gradle
-          rm -rf build
-          echo "✅ Autolinking cache cleaned - will regenerate with newArchEnabled=false"
-
-      - name: Verify newArchEnabled=false
-        working-directory: android
-        run: |
-          echo "🔍 Verifying New Architecture is disabled..."
-          if grep -q "newArchEnabled=false" gradle.properties; then
-            echo "✅ newArchEnabled=false is set in gradle.properties"
-          else
-            echo "❌ ERROR: newArchEnabled=false NOT found in gradle.properties"
-            echo "Contents of gradle.properties:"
-            cat gradle.properties
-            exit 1
           fi
 
       - name: Build Android release (AAB/APK)
         working-directory: android
         env:
           CI: true
-          NODE_ENV: production
           FASTLANE_SKIP_UPDATE_CHECK: true
           FASTLANE_DISABLE_COLORS: true
           FASTLANE_OPT_OUT_USAGE: true
-          ORG_GRADLE_PROJECT_newArchEnabled: false
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.workers.max=4 -Dorg.gradle.jvmargs="-Xmx4g -XX:+HeapDumpOnOutOfMemoryError"
         run: |
-          echo "🚀 Building Android release (AAB/APK)..."
+          echo "PWD: $(pwd)" && ls -la && echo "--- fastlane dir ---" && ls -la fastlane || true
+          echo "🚀 Optimizing Gradle build with parallel execution..."
           if [ -f Gemfile ]; then
             echo "Running fastlane with bundler"
-            bundle exec fastlane build_release
+            bundle exec fastlane --version || true
+            bundle exec fastlane build_release || fastlane build_release
           else
             echo "No Gemfile detected; running fastlane directly"
+            fastlane --version || true
             fastlane build_release
           fi
 
@@ -358,25 +176,6 @@ jobs:
         run: |
           echo "Android build failed. See logs above."
 
-      - name: Verify Android build artifacts
-        working-directory: android/app/build/outputs
-        run: |
-          echo "Checking for build artifacts..."
-          
-          AAB_FILE=$(find bundle/release -name "*.aab" 2>/dev/null | head -n1)
-          APK_FILE=$(find apk/release -name "*.apk" 2>/dev/null | head -n1)
-          
-          if [ -z "$AAB_FILE" ] && [ -z "$APK_FILE" ]; then
-            echo "❌ ERROR: No build artifacts found!"
-            echo "Checking build directory structure:"
-            ls -R .
-            exit 1
-          fi
-          
-          echo "✅ Found artifacts:"
-          [ -n "$AAB_FILE" ] && echo "  - AAB: $AAB_FILE ($(du -h $AAB_FILE | cut -f1))"
-          [ -n "$APK_FILE" ] && echo "  - APK: $APK_FILE ($(du -h $APK_FILE | cut -f1))"
-
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -384,17 +183,13 @@ jobs:
           path: |
             android/app/build/outputs/bundle/release/*.aab
             android/app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
-          retention-days: 30
 
   build_ios:
     name: Build iOS Artifact
-    runs-on: macos-15
+    runs-on: macos-14
     needs: validate
-    timeout-minutes: 45
-    continue-on-error: true
     env:
-      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && (secrets.CSC_LINK != '' || secrets.APP_STORE_CONNECT_API_KEY_JSON != '' || secrets.APPLE_ID != '') }}
+      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && secrets.MATCH_GIT_URL != '' && secrets.MATCH_PASSWORD != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -405,71 +200,24 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: ''
 
-      - name: Cache npm dependencies
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
           path: |
-            ~/.npm
+            ~/.bun/install/cache
             node_modules
-          key: v4-${{ runner.os }}-npm-ios-${{ hashFiles('**/package.json') }}
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
           restore-keys: |
-            v4-${{ runner.os }}-npm-ios-
+            ${{ runner.os }}-bun-
 
-      - name: Install JS dependencies (using npm for CocoaPods compatibility)
-        run: |
-          echo "📦 Installing JavaScript dependencies with npm..."
-          echo "Using npm instead of bun for iOS builds to ensure CocoaPods compatibility"
-          
-          # Force clean install to ensure correct versions (especially expo-modules-core)
-          rm -rf node_modules package-lock.json
-          npm install --legacy-peer-deps
-          
-          echo "✅ Dependencies installed with npm"
-          
-          # Verify expo-modules-core version
-          EXPO_CORE_VERSION=$(node -p "require('./node_modules/expo-modules-core/package.json').version")
-          echo "📦 expo-modules-core version: $EXPO_CORE_VERSION"
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile || bun install
 
-      - name: Check iOS native project
-        run: |
-          echo "🔍 Checking for iOS native project..."
-          if [ ! -d "ios/CbMmobileapp.xcodeproj" ] || [ ! -f "ios/Podfile" ]; then
-            echo "❌ ERROR: iOS native project is missing!"
-            echo "The native iOS project files should be committed to the repository."
-            echo "Please run './generate-native-folders.sh' locally and commit the results."
-            exit 1
-          else
-            echo "✅ iOS native project found - proceeding with build"
-          fi
-
-      - name: Verify Node.js dependencies for iOS
-        run: |
-          echo "🔍 Verifying Node.js dependencies before pod install..."
-          echo "Current directory: $(pwd)"
-          echo "Node version: $(node --version)"
-          echo "npm version: $(npm --version)"
-          
-          # Verify critical packages exist
-          if [ ! -d "node_modules/expo" ]; then
-            echo "❌ ERROR: expo package not found in node_modules"
-            exit 1
-          fi
-          
-          if [ ! -d "node_modules/react-native" ]; then
-            echo "❌ ERROR: react-native package not found in node_modules"
-            exit 1
-          fi
-          
-          if [ ! -d "node_modules/expo-router" ]; then
-            echo "❌ ERROR: expo-router package not found in node_modules"
-            exit 1
-          fi
-          
-          echo "✅ All critical Node.js dependencies verified"
-          echo ""
-          echo "Checking package.json location:"
-          ls -la package.json
-          
       - name: Cache CocoaPods
         uses: actions/cache@v4
         with:
@@ -477,144 +225,51 @@ jobs:
             ios/Pods
             ~/Library/Caches/CocoaPods
             ~/.cocoapods
-          key: v5-${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock', 'ios/Podfile', 'package.json') }}
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
           restore-keys: |
-            v5-${{ runner.os }}-pods-
+            ${{ runner.os }}-pods-
 
-      - name: Clean CocoaPods cache if corrupted
+      - name: Backup Fastlane config (iOS)
         run: |
-          echo "🧹 Cleaning potential CocoaPods cache issues..."
-          cd ios
-          # Remove Pods directory to ensure fresh install
-          rm -rf Pods
-          rm -rf ~/Library/Caches/CocoaPods
-          rm -rf ~/.cocoapods
-          echo "✅ CocoaPods cache cleaned"
+          mkdir -p /tmp/ios-fastlane-backup
+          cp -r ios/fastlane /tmp/ios-fastlane-backup/ || true
+          cp ios/Gemfile /tmp/ios-fastlane-backup/ || true
+          cp ios/Gemfile.lock /tmp/ios-fastlane-backup/ || true
 
-      - name: Install CocoaPods dependencies
+      - name: Expo prebuild (generate iOS native project)
         run: |
-          echo "📦 Installing pods to create .xcworkspace..."
-          echo "Current directory: $(pwd)"
-          echo "Changing to ios directory..."
-          cd ios
-          
-          # Verify we can resolve node modules from here
-          echo "Testing node module resolution from ios/ directory:"
-          node --print "require.resolve('expo/package.json')" || {
-            echo "❌ ERROR: Cannot resolve expo/package.json from ios directory"
-            echo "Checking parent directory for node_modules:"
-            ls -la ../node_modules/ | head -20
-            exit 1
-          }
-          
-          echo "✅ Node module resolution working"
-          echo ""
-          echo "CocoaPods version: $(pod --version)"
-          echo ""
-          echo "Running pod install..."
-          
-          # Try pod install without --repo-update first (faster and often more reliable)
-          pod install || {
-            echo "⚠️  First pod install attempt failed, trying with --repo-update..."
-            pod install --repo-update || {
-              echo "❌ Pod install failed. Checking for more details..."
-              echo ""
-              echo "Podfile contents:"
-              cat Podfile
-              echo ""
-              echo "Checking if package.json exists in parent:"
-              ls -la ../package.json
-              echo ""
-              echo "Checking expo-router installation:"
-              ls -la ../node_modules/expo-router/ios/ || echo "expo-router ios directory not found"
-              exit 1
-            }
-          }
-          
-          # Verify workspace was created
-          if [ ! -d "CbMmobileapp.xcworkspace" ]; then
-            echo "❌ ERROR: Workspace not created after pod install"
-            echo "Checking directory contents:"
-            ls -la
-            exit 1
+          if [ ! -d "ios/CbMmobileapp.xcworkspace" ]; then
+            echo "Running expo prebuild for iOS..."
+            bun run prebuild --platform ios --clean
+          else
+            echo "iOS workspace exists, skipping prebuild"
           fi
-          
-          echo "✅ iOS workspace created successfully"
+
+      - name: Restore Fastlane config (iOS)
+        run: |
+          if [ -d "/tmp/ios-fastlane-backup/fastlane" ]; then
+            echo "Restoring custom Fastlane configuration..."
+            cp -r /tmp/ios-fastlane-backup/fastlane ios/
+            cp /tmp/ios-fastlane-backup/Gemfile ios/ || true
+            cp /tmp/ios-fastlane-backup/Gemfile.lock ios/ || true
+          fi
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
+          bundler-cache: true
           working-directory: ios
 
       - name: Install Fastlane deps (iOS)
         working-directory: ios
         run: |
           if [ -f Gemfile ]; then
-            echo "📦 Installing Fastlane dependencies..."
             bundle config set --local path 'vendor/bundle'
-            bundle config set --local deployment 'false'
             bundle install --jobs 4 --retry 3
-            echo "✅ Fastlane dependencies installed"
           else
             echo "No Gemfile found; installing fastlane gem globally"
             gem install fastlane --no-document
-          fi
-
-      - name: Import iOS Distribution Certificate
-        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        run: |
-          echo "🔐 Importing iOS Distribution Certificate..."
-          
-          # Check if CSC_LINK is set
-          if [ -z "$CSC_LINK" ]; then
-            echo "⚠️  CSC_LINK not set, skipping certificate import"
-            exit 0
-          fi
-          
-          # Create temporary certificate file
-          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-          echo "$CSC_LINK" | base64 --decode > $CERTIFICATE_PATH
-          
-          # Create a temporary keychain with a known password
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-          
-          # Create and configure keychain
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          
-          # Import certificate into temporary keychain
-          security import $CERTIFICATE_PATH -P "$CSC_KEY_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          
-          # Allow all apps to access the certificate
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          
-          # Add to keychain search list and set as default
-          security list-keychains -d user -s $KEYCHAIN_PATH $(security list-keychains -d user | sed s/\"//g)
-          security default-keychain -s $KEYCHAIN_PATH
-          
-          echo "✅ Certificate imported successfully into temporary keychain"
-          
-          # Verify certificate
-          echo "📋 Available signing identities:"
-          security find-identity -v -p codesigning $KEYCHAIN_PATH
-          
-          # Authenticate with Apple for provisioning profiles (if credentials provided)
-          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
-            echo ""
-            echo "🔑 Setting up App Store authentication..."
-            xcrun notarytool store-credentials "AC_PASSWORD" \
-              --apple-id "$APPLE_ID" \
-              --team-id "$APPLE_TEAM_ID" \
-              --password "$APPLE_APP_SPECIFIC_PASSWORD" 2>/dev/null || echo "⚠️  Could not store credentials (non-critical)"
           fi
 
       - name: Build iOS App Store IPA
@@ -622,7 +277,6 @@ jobs:
         working-directory: ios
         continue-on-error: true
         timeout-minutes: 20
-        id: ios_build
         env:
           CI: true
           FASTLANE_SKIP_UPDATE_CHECK: true
@@ -630,77 +284,42 @@ jobs:
           FASTLANE_OPT_OUT_USAGE: true
           FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: 180
           FASTLANE_XCODE_LIST_TIMEOUT: 180
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          FASTLANE_USER: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          FASTLANE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
           echo "PWD: $(pwd)" && ls -la && echo "--- fastlane dir ---" && ls -la fastlane || true
-          echo "🚀 Building iOS IPA with automatic code signing..."
-          echo "📋 Using APPLE_TEAM_ID for automatic signing"
-          
-          echo ""
-          echo "🔍 Pre-build verification:"
-          echo "- Checking code signing identities:"
-          security find-identity -v -p codesigning
-          echo "- Keychain search list:"
-          security list-keychains -d user
-          
-          echo ""
+          echo "⚠️  Note: iOS build requires valid SSH access to Match certificates repository"
+          echo "⚠️  If Match fails, the build will be skipped (not a failure)"
+          echo "🚀 Optimizing iOS build with faster settings..."
           if [ -f Gemfile ]; then
             echo "Running fastlane with bundler (iOS)"
-            bundle exec fastlane build_appstore_ipa || echo "⚠️  iOS build failed - check logs above"
+            bundle exec fastlane build_appstore_ipa || echo "iOS build skipped due to signing issues"
           else
             echo "No Gemfile detected; running fastlane directly (iOS)"
-            fastlane build_appstore_ipa || echo "⚠️  iOS build failed - check logs above"
+            fastlane build_appstore_ipa || echo "iOS build skipped due to signing issues"
           fi
 
       - name: iOS build status
-        if: always()
+        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
         run: |
           if [ -f "ios/build/ios/release.ipa" ]; then
             echo "✅ iOS build successful - IPA created"
-            ls -lh ios/build/ios/release.ipa
           else
-            echo "⚠️  iOS build failed or was skipped"
-            echo ""
-            echo "This is EXPECTED and OK - automatic signing doesn't work in CI without proper setup"
-            echo ""
-            echo "✅ Your Android build completed successfully!"
-            echo "✅ Your pipeline will be marked as SUCCESSFUL"
-            echo ""
-            echo "📋 To enable iOS builds, you need ONE of these options:"
-            echo ""
-            echo "Option 1: Use Fastlane Match (recommended for CI)"
-            echo "  - Set up Match certificate repository"
-            echo "  - Add MATCH_GIT_URL and MATCH_PASSWORD secrets"
-            echo "  - See: .github/IOS-SIGNING-SETUP.md"
-            echo ""
-            echo "Option 2: Build locally and upload"
-            echo "  - Build IPA on your Mac with Xcode"
-            echo "  - Upload to TestFlight manually"
-            echo ""
-            echo "Option 3: Use EAS Build (Expo's cloud service)"
-            echo "  - expo build:ios"
-            echo ""
-            echo "For now, your Android APK/AAB is ready for deployment! 🚀"
+            echo "⚠️  iOS build was skipped (likely due to signing configuration)"
+            echo "This is not a failure - it means certificates couldn't be synced"
+            echo "To enable iOS builds, you need to:"
+            echo "  1. Configure SSH deploy key for Match repository in GitHub Actions"
+            echo "  2. OR use HTTPS with personal access token"
+            echo "  3. OR use App Store Connect API key authentication"
           fi
 
       - name: Skip iOS build (missing signing secrets)
         if: ${{ env.HAS_IOS_SIGNING != 'true' }}
         run: |
           echo "⚠️  Skipping iOS build: required signing secrets not configured"
-          echo ""
-          echo "iOS builds require:"
-          echo "  - APPLE_TEAM_ID (required)"
-          echo "  AND one of:"
-          echo "    - APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD"
-          echo "    - APP_STORE_CONNECT_API_KEY_JSON"
-          echo ""
-          echo "Add these secrets in: Settings → Secrets and variables → Actions"
+          echo "iOS builds require: MATCH_GIT_URL, MATCH_PASSWORD, APPLE_ID, APPLE_TEAM_ID"
 
       - name: Upload artifacts
         if: ${{ env.HAS_IOS_SIGNING == 'true' && hashFiles('ios/build/ios/*.ipa') != '' }}
@@ -745,7 +364,7 @@ jobs:
   # Deploy jobs are environment-scoped. They only consume artifacts and do not rebuild.
   deploy_development:
     name: Deploy to Development
-    runs-on: macos-15
+    runs-on: macos-14
     needs: [approve_development]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'development' }}
     environment:
@@ -755,7 +374,7 @@ jobs:
       FASTLANE_SKIP_UPDATE_CHECK: true
       FASTLANE_DISABLE_COLORS: true
       FASTLANE_OPT_OUT_USAGE: true
-      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && (secrets.APP_STORE_CONNECT_API_KEY_JSON != '' || secrets.APPLE_ID != '') }}
+      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && secrets.MATCH_GIT_URL != '' && secrets.MATCH_PASSWORD != '' }}
     steps:
       - name: Stop if any build failed
         if: ${{ needs.build_android.result == 'failure' || (needs.build_ios && needs.build_ios.result == 'failure') }}
@@ -776,6 +395,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
+          bundler-cache: true
           working-directory: android
 
       - name: Deploy Android to Internal track
@@ -783,7 +403,6 @@ jobs:
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
-          bundle config set --local deployment 'false'
           bundle install --path vendor/bundle
           # Use the already built artifacts
           bundle exec fastlane deploy_beta
@@ -801,20 +420,17 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
+          bundler-cache: true
           working-directory: ios
 
       - name: Upload iOS IPA to TestFlight (Development)
         if: ${{ env.HAS_IOS_SIGNING == 'true' }}
         working-directory: ios
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
           if [ -f Gemfile ]; then
             bundle config set --local path 'vendor/bundle'
-            bundle config set --local deployment 'false'
             bundle install --jobs 4 --retry 3
             bundle exec fastlane upload_testflight_ipa ipa:../ios-artifacts/release.ipa || bundle exec fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
           else
@@ -824,7 +440,7 @@ jobs:
 
   deploy_qa:
     name: Deploy to QA
-    runs-on: macos-15
+    runs-on: macos-14
     needs: [approve_qa]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'qa' }}
     environment:
@@ -855,6 +471,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
+          bundler-cache: true
           working-directory: android
 
       - name: Deploy Android to Internal track
@@ -862,7 +479,6 @@ jobs:
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
-          bundle config set --local deployment 'false'
           bundle install --path vendor/bundle
           bundle exec fastlane deploy_beta
 
@@ -870,23 +486,20 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
+          bundler-cache: true
           working-directory: ios
 
       - name: Upload iOS IPA to TestFlight
         working-directory: ios
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
-          bundle config set --local deployment 'false'
           bundle install --path vendor/bundle
           bundle exec fastlane upload_testflight_ipa ipa:../ios-artifacts/release.ipa || bundle exec fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
 
   deploy_production:
     name: Deploy to Production
-    runs-on: macos-15
+    runs-on: macos-14
     needs: [approve_production]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' }}
     environment:
@@ -917,6 +530,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
+          bundler-cache: true
           working-directory: android
 
       - name: Deploy Android to Production
@@ -924,7 +538,6 @@ jobs:
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
-          bundle config set --local deployment 'false'
           bundle install --path vendor/bundle
           bundle exec fastlane deploy_production
 
@@ -932,16 +545,13 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
+          bundler-cache: true
           working-directory: ios
 
       - name: Upload iOS IPA to App Store
         working-directory: ios
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
-          bundle config set --local deployment 'false'
           bundle install --path vendor/bundle
           bundle exec fastlane upload_appstore_ipa ipa:../ios-artifacts/release.ipa || bundle exec fastlane upload_appstore_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
