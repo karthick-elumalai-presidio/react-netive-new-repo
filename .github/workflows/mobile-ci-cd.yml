@@ -36,14 +36,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: ''
 
       - name: Cache npm dependencies
         uses: actions/cache@v4
         with:
           path: |
             node_modules
-          key: v4-${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          key: v4-${{ runner.os }}-npm-${{ hashFiles('**/package.json') }}
           restore-keys: |
             v4-${{ runner.os }}-npm-
 
@@ -83,7 +83,7 @@ jobs:
         with:
           path: |
             node_modules
-          key: v4-${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          key: v4-${{ runner.os }}-npm-${{ hashFiles('**/package.json') }}
           restore-keys: |
             v4-${{ runner.os }}-npm-
 
@@ -403,7 +403,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: ''
 
       - name: Cache npm dependencies
         uses: actions/cache@v4
@@ -411,7 +411,7 @@ jobs:
           path: |
             ~/.npm
             node_modules
-          key: v4-${{ runner.os }}-npm-ios-${{ hashFiles('**/package-lock.json', '**/package.json') }}
+          key: v4-${{ runner.os }}-npm-ios-${{ hashFiles('**/package.json') }}
           restore-keys: |
             v4-${{ runner.os }}-npm-ios-
 
