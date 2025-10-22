@@ -1,13 +1,12 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import { getLocales } from 'expo-localization';
 
 import enTranslation from './locales/en/translation.json';
 import jaTranslation from './locales/ja/translation.json';
 import zhTranslation from './locales/zh/translation.json';
 
-// Get device language
-const deviceLanguage = getLocales()[0]?.languageCode || 'en';
+// Get device language - fallback to 'en' since expo-localization is temporarily removed
+const deviceLanguage = 'en';
 
 // eslint-disable-next-line import/no-named-as-default-member
 i18n.use(initReactI18next).init({
