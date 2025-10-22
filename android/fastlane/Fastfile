@@ -1,72 +1,91 @@
-# This file contains the fastlane.tools configuration
-# You can find the documentation at https://docs.fastlane.tools
-#
-# For a list of all available actions, check out
-#
-#     https://docs.fastlane.tools/actions
-#
-# For a list of all available plugins, check out
-#
-#     https://docs.fastlane.tools/plugins/available-plugins
-#
-
-# Uncomment the line if you want fastlane to automatically update itself
-# update_fastlane
+# Fastlane configuration for Android CI/CD
+# Documentation: https://docs.fastlane.tools
 
 default_platform(:android)
 
 platform :android do
-  desc "Build debug APK (alias for build_debug)"
-  lane :build do
-    build_debug
-  end
-
-  desc "Build debug APK"
+  ##############################################
+  # 1️⃣  Build Debug APK
+  ##############################################
+  desc "Build debug APK (default lane)"
   lane :build_debug do
+    UI.message("🧱 Building Debug APK...")
     gradle(
       task: "assembleDebug",
-      project_dir: "."
-    )
-  end
-
-  desc "Build release APK and AAB"
-  lane :build_release do
-    gradle(
-      task: "bundleRelease assembleRelease",
       project_dir: ".",
+      flags: "--no-daemon --parallel --max-workers=4",
       properties: {
-        "org.gradle.jvmargs" => "-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+HeapDumpOnOutOfMemoryError",
+        "org.gradle.jvmargs" => "-Xmx4g -XX:MaxMetaspaceSize=1024m -XX:+HeapDumpOnOutOfMemoryError",
         "org.gradle.parallel" => "true",
-        "org.gradle.daemon" => "false",
         "org.gradle.caching" => "true",
         "android.enableJetifier" => "true",
         "android.useAndroidX" => "true"
-      },
-      flags: "--no-daemon --parallel --max-workers=4"
+      }
     )
   end
 
-  desc "Deploy to Google Play Internal Testing"
+  ##############################################
+  # 2️⃣  Build Release AAB + APK
+  ##############################################
+  desc "Build release AAB and APK artifacts"
+  lane :build_release do
+    UI.message("🚀 Building Release (AAB + APK)...")
+    gradle(
+      task: "bundleRelease assembleRelease",
+      project_dir: ".",
+      flags: "--no-daemon --parallel --max-workers=4",
+      properties: {
+        "org.gradle.jvmargs" => "-Xmx4g -XX:MaxMetaspaceSize=1024m -XX:+HeapDumpOnOutOfMemoryError",
+        "org.gradle.parallel" => "true",
+        "org.gradle.caching" => "true",
+        "android.enableJetifier" => "true",
+        "android.useAndroidX" => "true"
+      }
+    )
+
+    UI.success("✅ Release build complete!")
+    UI.message("Artifacts located in:")
+    UI.message("- AAB: app/build/outputs/bundle/release/")
+    UI.message("- APK: app/build/outputs/apk/release/")
+  end
+
+  ##############################################
+  # 3️⃣  Upload to Google Play Internal Testing
+  ##############################################
+  desc "Deploy build to Google Play Internal Testing"
   lane :deploy_beta do
+    UI.message("📦 Uploading to Google Play (Internal Testing)...")
+
     upload_to_play_store(
-      track: 'internal',
-      aab: 'app/build/outputs/bundle/release/app-release.aab',
-      apk: 'app/build/outputs/apk/release/app-release.apk',
+      track: "internal",
+      aab: "app/build/outputs/bundle/release/app-release.aab",
       skip_upload_metadata: true,
       skip_upload_images: true,
-      skip_upload_screenshots: true
+      skip_upload_screenshots: true,
+      json_key_data: ENV['SUPPLY_JSON_KEY_DATA'], # ← GitHub secret injected via CI
+      timeout: 300
     )
+
+    UI.success("✅ Successfully uploaded to Internal Testing track.")
   end
 
-  desc "Deploy to Google Play Production"
+  ##############################################
+  # 4️⃣  Upload to Google Play Production
+  ##############################################
+  desc "Deploy build to Google Play Production"
   lane :deploy_production do
+    UI.message("🚀 Uploading to Google Play (Production)...")
+
     upload_to_play_store(
-      track: 'production',
-      aab: 'app/build/outputs/bundle/release/app-release.aab',
-      apk: 'app/build/outputs/apk/release/app-release.apk',
+      track: "production",
+      aab: "app/build/outputs/bundle/release/app-release.aab",
       skip_upload_metadata: true,
       skip_upload_images: true,
-      skip_upload_screenshots: true
+      skip_upload_screenshots: true,
+      json_key_data: ENV['SUPPLY_JSON_KEY_DATA'],
+      timeout: 300
     )
+
+    UI.success("🎉 Successfully uploaded to Production!")
   end
 end

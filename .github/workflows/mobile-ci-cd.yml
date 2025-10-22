@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: Target environment
+        description: "Select deployment environment"
         required: true
         default: development
         type: choice
@@ -26,18 +26,20 @@ env:
   BUN_VERSION: '1.1.34'
 
 jobs:
+  # ==========================
+  # VALIDATION STAGE
+  # ==========================
   validate:
     name: Validate (Lint, Typecheck, Tests)
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: ''
+          cache: 'npm'
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -53,423 +55,263 @@ jobs:
       - name: Typecheck
         run: bun x tsc -p tsconfig.json --noEmit
 
-      # If you add tests later, enable this
-      # - name: Test
-      #   run: bun test
-
+  # ==========================
+  # ANDROID BUILD STAGE
+  # ==========================
   build_android:
     name: Build Android Artifact
     runs-on: ubuntu-latest
     needs: validate
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: ''
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.bun/install/cache
             node_modules
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
 
-      - name: Install JS dependencies
-        run: bun install --frozen-lockfile || bun install
+      - run: bun install --frozen-lockfile || bun install
 
-      - name: Backup Fastlane config
+      - name: Backup Fastlane
         run: |
-          mkdir -p /tmp/android-fastlane-backup
-          cp -r android/fastlane /tmp/android-fastlane-backup/ || true
-          cp android/Gemfile /tmp/android-fastlane-backup/ || true
-          cp android/Gemfile.lock /tmp/android-fastlane-backup/ || true
+          mkdir -p /tmp/android-fastlane
+          cp -r android/fastlane /tmp/android-fastlane/ || true
+          cp android/Gemfile* /tmp/android-fastlane/ || true
 
-      - name: Expo prebuild (generate Android native project)
+      - name: Expo Prebuild (Android)
         run: |
           if [ ! -f "android/gradlew" ]; then
-            echo "Running expo prebuild for Android..."
+            echo "Running expo prebuild..."
             bun run prebuild --platform android --clean
-          else
-            echo "Android gradle wrapper exists, skipping prebuild"
           fi
 
-      - name: Restore Fastlane config
-        run: |
-          if [ -d "/tmp/android-fastlane-backup/fastlane" ]; then
-            echo "Restoring custom Fastlane configuration..."
-            cp -r /tmp/android-fastlane-backup/fastlane android/
-            cp /tmp/android-fastlane-backup/Gemfile android/ || true
-            cp /tmp/android-fastlane-backup/Gemfile.lock android/ || true
-          fi
+      - name: Restore Fastlane
+        run: cp -r /tmp/android-fastlane/* android/ || true
 
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
           working-directory: android
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-            android/.gradle
-            android/app/build
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
 
-      - name: Install Fastlane deps (Android)
-        working-directory: android
-        run: |
-          if [ ! -f Gemfile ]; then
-            echo "No Gemfile found; installing fastlane gem globally"
-            gem install fastlane --no-document
-          fi
-
-      - name: Build Android release (AAB/APK)
+      - name: Build Android (Release)
         working-directory: android
         env:
           CI: true
           FASTLANE_SKIP_UPDATE_CHECK: true
-          FASTLANE_DISABLE_COLORS: true
-          FASTLANE_OPT_OUT_USAGE: true
-          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.parallel=true -Dorg.gradle.workers.max=4 -Dorg.gradle.jvmargs="-Xmx4g -XX:+HeapDumpOnOutOfMemoryError"
         run: |
-          echo "PWD: $(pwd)" && ls -la && echo "--- fastlane dir ---" && ls -la fastlane || true
-          echo "🚀 Optimizing Gradle build with parallel execution..."
-          if [ -f Gemfile ]; then
-            echo "Running fastlane with bundler"
-            bundle exec fastlane --version || true
-            bundle exec fastlane build_release || fastlane build_release
-          else
-            echo "No Gemfile detected; running fastlane directly"
-            fastlane --version || true
-            fastlane build_release
-          fi
+          bundle exec fastlane build_release || fastlane build_release
 
-      - name: Android build failure summary
-        if: failure()
-        run: |
-          echo "Android build failed. See logs above."
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: android-build
-          path: |
-            android/app/build/outputs/bundle/release/*.aab
-            android/app/build/outputs/apk/release/*.apk
+          path: android/app/build/outputs/**/release/*.{aab,apk}
+          retention-days: 5
 
+  # ==========================
+  # iOS BUILD STAGE
+  # ==========================
   build_ios:
     name: Build iOS Artifact
     runs-on: macos-14
     needs: validate
     env:
-      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && secrets.MATCH_GIT_URL != '' && secrets.MATCH_PASSWORD != '' }}
+      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID && secrets.MATCH_GIT_URL && secrets.MATCH_PASSWORD }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: ''
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/.bun/install/cache
             node_modules
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
 
-      - name: Install JS dependencies
-        run: bun install --frozen-lockfile || bun install
+      - run: bun install --frozen-lockfile || bun install
 
-      - name: Cache CocoaPods
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ios/Pods
             ~/Library/Caches/CocoaPods
-            ~/.cocoapods
           key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pods-
 
-      - name: Backup Fastlane config (iOS)
+      - name: Backup Fastlane
         run: |
-          mkdir -p /tmp/ios-fastlane-backup
-          cp -r ios/fastlane /tmp/ios-fastlane-backup/ || true
-          cp ios/Gemfile /tmp/ios-fastlane-backup/ || true
-          cp ios/Gemfile.lock /tmp/ios-fastlane-backup/ || true
+          mkdir -p /tmp/ios-fastlane
+          cp -r ios/fastlane /tmp/ios-fastlane/ || true
+          cp ios/Gemfile* /tmp/ios-fastlane/ || true
 
-      - name: Expo prebuild (generate iOS native project)
+      - name: Expo Prebuild (iOS)
         run: |
-          if [ ! -d "ios/CbMmobileapp.xcworkspace" ]; then
-            echo "Running expo prebuild for iOS..."
+          if [ ! -d "ios/*.xcworkspace" ]; then
             bun run prebuild --platform ios --clean
-          else
-            echo "iOS workspace exists, skipping prebuild"
           fi
 
-      - name: Restore Fastlane config (iOS)
-        run: |
-          if [ -d "/tmp/ios-fastlane-backup/fastlane" ]; then
-            echo "Restoring custom Fastlane configuration..."
-            cp -r /tmp/ios-fastlane-backup/fastlane ios/
-            cp /tmp/ios-fastlane-backup/Gemfile ios/ || true
-            cp /tmp/ios-fastlane-backup/Gemfile.lock ios/ || true
-          fi
+      - name: Restore Fastlane
+        run: cp -r /tmp/ios-fastlane/* ios/ || true
 
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
           working-directory: ios
 
-
-      - name: Install Fastlane deps (iOS)
+      - name: Build iOS IPA
+        if: ${{ env.HAS_IOS_SIGNING }}
         working-directory: ios
-        run: |
-          if [ ! -f Gemfile ]; then
-            echo "No Gemfile found; installing fastlane gem globally"
-            gem install fastlane --no-document
-          fi
-
-      - name: Build iOS App Store IPA
-        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
-        working-directory: ios
-        continue-on-error: true
-        timeout-minutes: 20
         env:
-          CI: true
-          FASTLANE_SKIP_UPDATE_CHECK: true
-          FASTLANE_DISABLE_COLORS: true
-          FASTLANE_OPT_OUT_USAGE: true
-          FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT: 180
-          FASTLANE_XCODE_LIST_TIMEOUT: 180
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          echo "PWD: $(pwd)" && ls -la && echo "--- fastlane dir ---" && ls -la fastlane || true
-          echo "⚠️  Note: iOS build requires valid SSH access to Match certificates repository"
-          echo "⚠️  If Match fails, the build will be skipped (not a failure)"
-          echo "🚀 Optimizing iOS build with faster settings..."
-          if [ -f Gemfile ]; then
-            echo "Running fastlane with bundler (iOS)"
-            bundle exec fastlane build_appstore_ipa || echo "iOS build skipped due to signing issues"
-          else
-            echo "No Gemfile detected; running fastlane directly (iOS)"
-            fastlane build_appstore_ipa || echo "iOS build skipped due to signing issues"
-          fi
+          bundle exec fastlane build_appstore_ipa || echo "Skipped due to signing issues"
 
-      - name: iOS build status
-        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
-        run: |
-          if [ -f "ios/build/ios/release.ipa" ]; then
-            echo "✅ iOS build successful - IPA created"
-          else
-            echo "⚠️  iOS build was skipped (likely due to signing configuration)"
-            echo "This is not a failure - it means certificates couldn't be synced"
-            echo "To enable iOS builds, you need to:"
-            echo "  1. Configure SSH deploy key for Match repository in GitHub Actions"
-            echo "  2. OR use HTTPS with personal access token"
-            echo "  3. OR use App Store Connect API key authentication"
-          fi
-
-      - name: Skip iOS build (missing signing secrets)
-        if: ${{ env.HAS_IOS_SIGNING != 'true' }}
-        run: |
-          echo "⚠️  Skipping iOS build: required signing secrets not configured"
-          echo "iOS builds require: MATCH_GIT_URL, MATCH_PASSWORD, APPLE_ID, APPLE_TEAM_ID"
-
-      - name: Upload artifacts
-        if: ${{ env.HAS_IOS_SIGNING == 'true' && hashFiles('ios/build/ios/*.ipa') != '' }}
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
+        if: ${{ env.HAS_IOS_SIGNING }}
         with:
           name: ios-build
-          path: |
-            ios/build/ios/*.ipa
-          if-no-files-found: warn
+          path: ios/build/ios/*.ipa
+          retention-days: 5
 
-  # Explicit approval gates for each environment
+  # ==========================
+  # APPROVAL GATES
+  # ==========================
   approve_development:
     name: Manual Approval (Development)
     runs-on: ubuntu-latest
     needs: [build_android]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'development' }}
-    environment:
-      name: development
+    environment: development
     steps:
-      - run: echo " Development deployment approved"
+      - run: echo "Development approved"
 
   approve_qa:
     name: Manual Approval (QA)
     runs-on: ubuntu-latest
     needs: [build_android, build_ios]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'qa' }}
-    environment:
-      name: qa
+    environment: qa
     steps:
-      - run: echo " QA deployment approved"
+      - run: echo "QA approved"
 
   approve_production:
     name: Manual Approval (Production)
     runs-on: ubuntu-latest
     needs: [build_android, build_ios]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' }}
-    environment:
-      name: production
+    environment: production
     steps:
-      - run: echo " Production deployment approved"
+      - run: echo "Production approved"
 
-  # Deploy jobs are environment-scoped. They only consume artifacts and do not rebuild.
+  # ==========================
+  # DEPLOYMENT JOBS
+  # ==========================
+
   deploy_development:
     name: Deploy to Development
     runs-on: macos-14
     needs: [approve_development]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'development' }}
-    environment:
-      name: development
-    env:
-      CI: true
-      FASTLANE_SKIP_UPDATE_CHECK: true
-      FASTLANE_DISABLE_COLORS: true
-      FASTLANE_OPT_OUT_USAGE: true
-      HAS_IOS_SIGNING: ${{ secrets.APPLE_TEAM_ID != '' && secrets.MATCH_GIT_URL != '' && secrets.MATCH_PASSWORD != '' }}
+    environment: development
     steps:
-      - name: Stop if any build failed
-        if: ${{ needs.build_android.result == 'failure' || (needs.build_ios && needs.build_ios.result == 'failure') }}
-        run: |
-          echo "Aborting deploy: a build job failed."
-          exit 1
+      - uses: actions/checkout@v4
 
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download Android artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: android-build
           path: android-artifacts
 
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
           working-directory: android
 
-      - name: Deploy Android to Internal track
+      - name: Deploy Android (Internal Track)
         working-directory: android
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
           bundle install --path vendor/bundle
-          # Use the already built artifacts
           bundle exec fastlane deploy_beta
 
-      # Optional iOS upload to TestFlight Internal for development
-      - name: Download iOS artifacts
-        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: ios-build
           path: ios-artifacts
 
-      - name: Setup Ruby (iOS)
-        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
           working-directory: ios
 
-      - name: Upload iOS IPA to TestFlight (Development)
-        if: ${{ env.HAS_IOS_SIGNING == 'true' }}
+      - name: Upload iOS IPA (Development)
         working-directory: ios
         env:
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
-          if [ -f Gemfile ]; then
-            bundle config set --local path 'vendor/bundle'
-            bundle install --jobs 4 --retry 3
-            bundle exec fastlane upload_testflight_ipa ipa:../ios-artifacts/release.ipa || bundle exec fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
-          else
-            gem install fastlane --no-document
-            fastlane upload_testflight_ipa ipa:../ios-artifacts/release.ipa || fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
-          fi
+          bundle install --path vendor/bundle
+          bundle exec fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
 
   deploy_qa:
     name: Deploy to QA
     runs-on: macos-14
     needs: [approve_qa]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'qa' }}
-    environment:
-      name: qa
+    environment: qa
     steps:
-      - name: Stop if any build failed
-        if: ${{ needs.build_android.result == 'failure' || needs.build_ios.result == 'failure' }}
-        run: |
-          echo "Aborting QA deploy: a build job failed."
-          exit 1
+      - uses: actions/checkout@v4
 
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download Android artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: android-build
           path: android-artifacts
 
-      - name: Download iOS artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: ios-build
           path: ios-artifacts
 
-      - name: Setup Ruby (Android)
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
           working-directory: android
 
-      - name: Deploy Android to Internal track
+      - name: Deploy Android (QA Beta)
         working-directory: android
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
@@ -477,58 +319,46 @@ jobs:
           bundle install --path vendor/bundle
           bundle exec fastlane deploy_beta
 
-      - name: Setup Ruby (iOS)
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
           working-directory: ios
 
-      - name: Upload iOS IPA to TestFlight
+      - name: Upload iOS IPA (QA TestFlight)
         working-directory: ios
         env:
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
           bundle install --path vendor/bundle
-          bundle exec fastlane upload_testflight_ipa ipa:../ios-artifacts/release.ipa || bundle exec fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
+          bundle exec fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
 
   deploy_production:
     name: Deploy to Production
     runs-on: macos-14
     needs: [approve_production]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' }}
-    environment:
-      name: production
+    environment: production
     steps:
-      - name: Stop if any build failed
-        if: ${{ needs.build_android.result == 'failure' || needs.build_ios.result == 'failure' }}
-        run: |
-          echo "Aborting production deploy: a build job failed."
-          exit 1
+      - uses: actions/checkout@v4
 
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download Android artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: android-build
           path: android-artifacts
 
-      - name: Download iOS artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: ios-build
           path: ios-artifacts
 
-      - name: Setup Ruby (Android)
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
           working-directory: android
 
-      - name: Deploy Android to Production
+      - name: Deploy Android (Production)
         working-directory: android
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
@@ -536,17 +366,16 @@ jobs:
           bundle install --path vendor/bundle
           bundle exec fastlane deploy_production
 
-      - name: Setup Ruby (iOS)
-        uses: ruby/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
           working-directory: ios
 
-      - name: Upload iOS IPA to App Store
+      - name: Upload iOS IPA (App Store)
         working-directory: ios
         env:
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
           bundle install --path vendor/bundle
-          bundle exec fastlane upload_appstore_ipa ipa:../ios-artifacts/release.ipa || bundle exec fastlane upload_appstore_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
+          bundle exec fastlane upload_appstore_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
