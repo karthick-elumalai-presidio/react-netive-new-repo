@@ -86,8 +86,13 @@ jobs:
           restore-keys: |
             v4-${{ runner.os }}-bun-
 
-      - name: Install JS dependencies
-        run: bun install --frozen-lockfile || bun install
+      - name: Install JS dependencies  
+        run: |
+          echo "📦 Installing JavaScript dependencies..."
+          # Use npm for consistent dependency resolution across all platforms
+          rm -rf node_modules package-lock.json
+          npm install --legacy-peer-deps
+          echo "✅ Dependencies installed"
 
       - name: Verify critical dependencies
         run: |
@@ -274,8 +279,16 @@ jobs:
         run: |
           echo "📦 Installing JavaScript dependencies with npm..."
           echo "Using npm instead of bun for iOS builds to ensure CocoaPods compatibility"
-          npm ci --legacy-peer-deps || npm install --legacy-peer-deps || npm install
+          
+          # Force clean install to ensure correct versions (especially expo-modules-core)
+          rm -rf node_modules package-lock.json
+          npm install --legacy-peer-deps
+          
           echo "✅ Dependencies installed with npm"
+          
+          # Verify expo-modules-core version
+          EXPO_CORE_VERSION=$(node -p "require('./node_modules/expo-modules-core/package.json').version")
+          echo "📦 expo-modules-core version: $EXPO_CORE_VERSION"
 
       - name: Check iOS native project
         run: |

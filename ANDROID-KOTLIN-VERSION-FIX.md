@@ -168,11 +168,16 @@ You should see this in the build output:
 - [Kotlin Releases](https://github.com/JetBrains/kotlin/releases)
 - [KSP Compatibility](https://github.com/google/ksp/releases)
 - [Expo SDK 54 Release Notes](https://expo.dev/changelog/2025/01-14-sdk-54)
-- [React Native 0.76 Release](https://reactnative.dev/blog)
+- [React Native 0.76 Release Notes](https://reactnative.dev/blog)
+- [React Native 0.76 Breaking Changes](https://github.com/facebook/react-native/releases/tag/v0.76.0)
 
 ## Date Fixed
 October 22, 2025
 
 ## Summary
-**The Android build will now work on both Ubuntu and macOS runners** after explicitly setting Kotlin version to 2.0.21, which is compatible with KSP and the modern React Native/Expo stack.
+**The Android build will now work on both Ubuntu and macOS runners** after applying two critical fixes:
+1. ✅ **Kotlin version upgraded to 2.0.21** - compatible with KSP and Expo SDK 54/React Native 0.76
+2. ✅ **Removed deprecated `enableBundleCompression` property** - no longer exists in React Native 0.76
+
+These fixes address React Native 0.76 compatibility requirements and ensure the project builds successfully in CI/CD environments.
 
