@@ -105,6 +105,7 @@ android {
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+        buildConfigField "boolean", "IS_EDGE_TO_EDGE_ENABLED", "false"
     }
     signingConfigs {
         debug {
@@ -168,6 +169,9 @@ dependencies {
     
     // Add missing React Native dependencies for autolinking
     implementation("com.facebook.react:react-native:+")
+    
+    // Add missing React Native common dependencies
+    implementation("com.facebook.react:react-native-common:+")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
