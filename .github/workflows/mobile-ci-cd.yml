@@ -95,8 +95,8 @@ jobs:
           
           # Fix ajv dependency conflicts for Expo SDK 53
           echo "🔧 Fixing ajv dependency conflicts..."
-          npm install ajv@^8.12.0 --save-dev
-          npm install ajv-keywords@^5.1.0 --save-dev
+          npm install ajv@^8.12.0 --save-dev --force
+          npm install ajv-keywords@^5.1.0 --save-dev --force
           
           echo "✅ Dependencies installed and conflicts resolved"
 
@@ -191,8 +191,8 @@ jobs:
           npm install --legacy-peer-deps
           
           # Fix ajv dependency conflicts
-          npm install ajv@^8.12.0 --save-dev
-          npm install ajv-keywords@^5.1.0 --save-dev
+          npm install ajv@^8.12.0 --save-dev --force
+          npm install ajv-keywords@^5.1.0 --save-dev --force
           
           echo "✅ Dependencies cleaned and fixed"
 
