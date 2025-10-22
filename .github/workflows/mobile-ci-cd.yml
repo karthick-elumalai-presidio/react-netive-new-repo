@@ -252,6 +252,43 @@ jobs:
           done
           
           echo "✅ All expo modules verified"
+          
+          # Final verification: Test if expo-localization can be imported
+          echo "🧪 Testing expo-localization import..."
+          node -e "
+            try {
+              require('expo-localization');
+              console.log('✅ expo-localization import successful');
+            } catch (error) {
+              console.log('❌ expo-localization import failed:', error.message);
+              process.exit(1);
+            }
+          " || {
+            echo "❌ ERROR: expo-localization cannot be imported"
+            echo "🔧 Final attempt to fix expo-localization..."
+            npm uninstall expo-localization
+            npm install expo-localization@~14.0.0 --force
+            
+            # Test import again after reinstallation
+            echo "🧪 Testing expo-localization import after reinstall..."
+            node -e "
+              try {
+                require('expo-localization');
+                console.log('✅ expo-localization import successful after reinstall');
+              } catch (error) {
+                console.log('❌ expo-localization import still failed:', error.message);
+                process.exit(1);
+              }
+            " || {
+              echo "❌ ERROR: expo-localization still cannot be imported after reinstall"
+              echo "🔍 Debugging expo-localization installation..."
+              echo "Directory contents:"
+              ls -la node_modules/expo-localization/ || echo "expo-localization directory not found"
+              echo "Build directory contents:"
+              ls -la node_modules/expo-localization/build/ || echo "Build directory not found"
+              exit 1
+            }
+          }
 
       - name: Regenerate Android project for Expo SDK compatibility
         run: |
