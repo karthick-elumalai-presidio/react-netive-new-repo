@@ -73,6 +73,12 @@ jobs:
       - name: Install JS dependencies
         run: bun install --frozen-lockfile || bun install
 
+      - name: Expo Prebuild (Android)
+        run: |
+          if [ ! -f "android/gradlew" ]; then
+            bun run prebuild --platform android --clean
+          fi
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -125,6 +131,12 @@ jobs:
 
       - name: Install JS dependencies
         run: bun install --frozen-lockfile || bun install
+
+      - name: Expo Prebuild (iOS)
+        run: |
+          if [ ! -d "ios/*.xcworkspace" ]; then
+            bun run prebuild --platform ios --clean
+          fi
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
