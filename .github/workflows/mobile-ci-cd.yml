@@ -196,6 +196,7 @@ jobs:
           
           # Fix expo-localization native module issue
           echo "🔧 Fixing expo-localization native module..."
+          npm uninstall expo-localization
           npm install expo-localization@~14.0.0 --force
           
           # Ensure all expo modules are properly installed
@@ -224,6 +225,22 @@ jobs:
             echo "❌ ERROR: ExpoLocalization native module not found"
             echo "🔧 Reinstalling expo-localization..."
             npm install expo-localization@~14.0.0 --force
+            
+            # Verify the file exists after reinstallation
+            if [ ! -f "node_modules/expo-localization/build/ExpoLocalization.js" ]; then
+              echo "❌ ERROR: ExpoLocalization native module still missing after reinstall"
+              echo "🔧 Trying alternative installation method..."
+              npm uninstall expo-localization
+              npm install expo-localization@~14.0.0 --force
+              
+              # Final verification
+              if [ ! -f "node_modules/expo-localization/build/ExpoLocalization.js" ]; then
+                echo "❌ ERROR: ExpoLocalization native module cannot be installed"
+                echo "🔍 Listing expo-localization directory contents:"
+                ls -la node_modules/expo-localization/build/ || echo "Build directory does not exist"
+                exit 1
+              fi
+            fi
           fi
           
           # Verify other critical expo modules
