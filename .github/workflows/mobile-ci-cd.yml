@@ -93,8 +93,10 @@ jobs:
           working-directory: android
 
       - name: Install Fastlane dependencies
+        working-directory: android
         run: |
-          cd android
+          pwd
+          ls -la
           bundle config set --local frozen false
           bundle install
 
@@ -153,8 +155,10 @@ jobs:
           working-directory: ios
         
       - name: Install Fastlane dependencies
+        working-directory: ios
         run: |
-          cd ios
+          pwd
+          ls -la
           bundle config set --local frozen false
           bundle install
         
