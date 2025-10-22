@@ -10,7 +10,7 @@
     "prebuild:clean": "expo prebuild --clean",
     "build:android": "expo build:android",
     "build:ios": "expo build:ios",
-    "lint": "eslint \"**/*.{js,jsx,ts,tsx,css}\" && prettier -c \"**/*.{js,jsx,ts,tsx,json,css}\"",
+    "lint": "eslint \"**/*.{js,jsx,ts,tsx,css}\" && prettier --write \"**/*.{js,jsx,ts,tsx,json,css}\"",
     "format": "eslint \"**/*.{js,jsx,ts,tsx,css}\" --fix && prettier \"**/*.{js,jsx,ts,tsx,json,css}\" --write",
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,css}\"",
     "type-check": "tsc --noEmit",

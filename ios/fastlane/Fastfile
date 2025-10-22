@@ -45,33 +45,40 @@ platform :ios do
 
   desc "Build debug version"
   lane :build_debug do
-    automatic_code_signing(
-      path: "CbMmobileapp.xcodeproj",
-      use_automatic_signing: true,
-      team_id: ENV['APPLE_TEAM_ID']
-    )
+    begin
+      automatic_code_signing(
+        path: "CbMmobileapp.xcodeproj",
+        use_automatic_signing: true,
+        team_id: ENV['APPLE_TEAM_ID']
+      )
 
-    update_project_team(
-      path: "CbMmobileapp.xcodeproj",
-      teamid: ENV['APPLE_TEAM_ID']
-    )
+      update_project_team(
+        path: "CbMmobileapp.xcodeproj",
+        teamid: ENV['APPLE_TEAM_ID']
+      )
 
-    build_app(
-      workspace: "CbMmobileapp.xcworkspace",
-      scheme: "CbMmobileapp",
-      configuration: "Debug",
-      export_method: "development",
-      export_options: {
-        signingStyle: "automatic",
-        provisioningProfiles: {
-          "com.anonymous.CbM-mobile-app" => ""
+      build_app(
+        workspace: "CbMmobileapp.xcworkspace",
+        scheme: "CbMmobileapp",
+        configuration: "Debug",
+        export_method: "development",
+        export_options: {
+          signingStyle: "automatic",
+          provisioningProfiles: {
+            "com.anonymous.CbM-mobile-app" => ""
+          },
+          compileBitcode: false
         },
-        compileBitcode: false
-      },
-      team_id: ENV['APPLE_TEAM_ID'],
-      automatic_code_signing: true,
-      xcargs: "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Automatic"
-    )
+        team_id: ENV['APPLE_TEAM_ID'],
+        automatic_code_signing: true,
+        xcargs: "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Automatic",
+        fail_build: true
+      )
+    rescue => ex
+      UI.error("Debug build failed: #{ex.message}")
+      UI.error("Full error: #{ex.backtrace.join('\n')}")
+      raise ex
+    end
   end
 
   desc "Build and upload to TestFlight"
@@ -175,41 +182,63 @@ platform :ios do
   # Builds an App Store signed IPA and stores it at ios/build/ios/release.ipa
   desc "Build App Store (Release) IPA artifact"
   lane :build_appstore_ipa do
-    # Use automatic code signing with Apple Team ID
-    if ENV['APPLE_TEAM_ID'] && !ENV['APPLE_TEAM_ID'].empty?
-      UI.success("✅ Using automatic code signing with Team ID: #{ENV['APPLE_TEAM_ID']}")
-      
-      # Update project to use automatic signing
-      # Explicitly set code_sign_identity to empty string to clear any manual settings
-      update_code_signing_settings(
-        path: "CbMmobileapp.xcodeproj",
-        use_automatic_signing: true,
-        team_id: ENV['APPLE_TEAM_ID'],
-        code_sign_identity: "",  # Clear any manual identity
-        targets: ["CbMmobileapp"],
-        build_configurations: ["Release"]
-      )
-    else
-      UI.error("❌ APPLE_TEAM_ID not set - automatic signing will fail")
-      UI.error("Please set APPLE_TEAM_ID in your environment or GitHub Secrets")
-    end
+    begin
+      # Use automatic code signing with Apple Team ID
+      if ENV['APPLE_TEAM_ID'] && !ENV['APPLE_TEAM_ID'].empty?
+        UI.success("✅ Using automatic code signing with Team ID: #{ENV['APPLE_TEAM_ID']}")
+        
+        # Update project to use automatic signing
+        # Explicitly set code_sign_identity to empty string to clear any manual settings
+        update_code_signing_settings(
+          path: "CbMmobileapp.xcodeproj",
+          use_automatic_signing: true,
+          team_id: ENV['APPLE_TEAM_ID'],
+          code_sign_identity: "",  # Clear any manual identity
+          targets: ["CbMmobileapp"],
+          build_configurations: ["Release"]
+        )
+      else
+        UI.error("❌ APPLE_TEAM_ID not set - automatic signing will fail")
+        UI.error("Please set APPLE_TEAM_ID in your environment or GitHub Secrets")
+        raise "APPLE_TEAM_ID not configured"
+      end
 
-    build_app(
-      workspace: "CbMmobileapp.xcworkspace",
-      scheme: "CbMmobileapp",
-      configuration: "Release",
-      export_method: "app-store",
-      output_directory: "build/ios",
-      output_name: "release.ipa",
-      export_options: {
-        method: "app-store",
-        teamID: ENV['APPLE_TEAM_ID'],
-        signingStyle: "automatic",
-        uploadBitcode: false,
-        uploadSymbols: true,
-        compileBitcode: false
-      }
-    )
+      build_app(
+        workspace: "CbMmobileapp.xcworkspace",
+        scheme: "CbMmobileapp",
+        configuration: "Release",
+        export_method: "app-store",
+        output_directory: "build/ios",
+        output_name: "release.ipa",
+        export_options: {
+          method: "app-store",
+          teamID: ENV['APPLE_TEAM_ID'],
+          signingStyle: "automatic",
+          uploadBitcode: false,
+          uploadSymbols: true,
+          compileBitcode: false
+        },
+        xcargs: "DEVELOPMENT_TEAM=#{ENV['APPLE_TEAM_ID']} CODE_SIGN_STYLE=Automatic",
+        fail_build: true
+      )
+    rescue => ex
+      UI.error("iOS build failed: #{ex.message}")
+      UI.error("Full error: #{ex.backtrace.join('\n')}")
+      
+      # Additional debugging information
+      UI.error("Environment variables:")
+      UI.error("APPLE_TEAM_ID: #{ENV['APPLE_TEAM_ID']}")
+      UI.error("APPLE_ID: #{ENV['APPLE_ID']}")
+      
+      # Check if workspace exists
+      if File.exist?("CbMmobileapp.xcworkspace")
+        UI.success("✅ Workspace exists: CbMmobileapp.xcworkspace")
+      else
+        UI.error("❌ Workspace not found: CbMmobileapp.xcworkspace")
+      end
+      
+      raise ex
+    end
   end
 
   # Uploads an existing IPA directly to App Store (no rebuild)

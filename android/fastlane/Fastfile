@@ -31,10 +31,20 @@ platform :android do
 
   desc "Build release APK and AAB"
   lane :build_release do
-    gradle(
-      task: "bundleRelease assembleRelease",
-      project_dir: "."
-    )
+    begin
+      gradle(
+        task: "bundleRelease assembleRelease",
+        project_dir: ".",
+        properties: {
+          "org.gradle.daemon" => "false",
+          "org.gradle.parallel" => "true"
+        }
+      )
+    rescue => ex
+      UI.error("Build failed: #{ex.message}")
+      UI.error("Full error: #{ex.backtrace.join('\n')}")
+      raise ex
+    end
   end
 
   desc "Deploy to Google Play Internal Testing"
