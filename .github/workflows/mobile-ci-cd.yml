@@ -2,28 +2,12 @@ name: Mobile App CI/CD
 
 on:
   push:
-    branches:
-      - develop
-      - main
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: Target environment
-        required: true
-        default: development
-        type: choice
-        options:
-          - development
-          - qa
-          - production
-
-concurrency:
-  group: mobile-${{ github.ref }}
-  cancel-in-progress: false
+    branches: [main, develop]
+  pull_request:
 
 env:
-  NODE_VERSION: '20'
-  BUN_VERSION: '1.1.34'
+  NODE_VERSION: 20
+  BUN_VERSION: 1.1.34
 
 jobs:
   validate:
@@ -38,19 +22,19 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup Bun
+      - name: Install Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile || bun install
+        run: bun install
 
       - name: Lint
         run: bun run lint
 
       - name: Typecheck
-        run: bun x tsc --noEmit
+        run: bun run typecheck
 
   build_android:
     name: Build Android Artifact
@@ -76,7 +60,8 @@ jobs:
       - name: Expo Prebuild (Android)
         run: |
           if [ ! -f "android/gradlew" ]; then
-            bun run prebuild --platform android --clean
+            echo "🛠️ Running expo prebuild..."
+            expo prebuild --platform android --clean
           fi
 
       - name: Setup Java
@@ -92,32 +77,22 @@ jobs:
           bundler-cache: true
 
       - name: Install Fastlane dependencies
+        working-directory: android
         run: |
-          cd android
-          pwd
-          ls -la Gemfile
+          echo "📂 Current Directory: $(pwd)"
+          ls -la
           bundle config set --local frozen false
           bundle install
 
       - name: Build Android release (AAB/APK)
         working-directory: android
-        env:
-          CI: true
-          FASTLANE_SKIP_UPDATE_CHECK: true
         run: |
+          echo "🚀 Building Android release..."
           bundle exec fastlane build_release
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-build
-          path: |
-            android/app/build/outputs/bundle/release/*.aab
-            android/app/build/outputs/apk/release/*.apk
 
   build_ios:
     name: Build iOS Artifact
-    runs-on: macos-15
+    runs-on: macos-14
     needs: validate
     env:
       HAS_IOS_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON != '' }}
@@ -140,175 +115,32 @@ jobs:
 
       - name: Expo Prebuild (iOS)
         run: |
-          if [ ! -d "ios/*.xcworkspace" ]; then
-            bun run prebuild --platform ios --clean
+          if [ ! -d "ios/CbMmobileapp.xcodeproj" ]; then
+            echo "🛠️ Running expo prebuild..."
+            expo prebuild --platform ios --clean
           fi
 
-
-    
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
-        
+
       - name: Install Fastlane dependencies
+        working-directory: ios
         run: |
-          cd ios
-          pwd
-          ls -la Gemfile
+          echo "📂 Current Directory: $(pwd)"
+          ls -la
           bundle config set --local frozen false
           bundle install
-        
 
       - name: Build iOS App Store IPA
         if: ${{ env.HAS_IOS_API_KEY == 'true' }}
         working-directory: ios
         env:
-          CI: true
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
         run: |
+          echo "🚀 Building iOS App Store IPA..."
           bundle exec fastlane build_appstore_ipa
-
-      - name: Upload artifacts
-        if: ${{ env.HAS_IOS_API_KEY == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-build
-          path: ios/build/ios/*.ipa
-
-  approve_development:
-    name: Manual Approval (Development)
-    runs-on: ubuntu-latest
-    needs: [build_android]
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'development' }}
-    environment:
-      name: development
-    steps:
-      - run: echo "✅ Development deployment approved"
-
-  approve_qa:
-    name: Manual Approval (QA)
-    runs-on: ubuntu-latest
-    needs: [build_android, build_ios]
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'qa' }}
-    environment:
-      name: qa
-    steps:
-      - run: echo "✅ QA deployment approved"
-
-  approve_production:
-    name: Manual Approval (Production)
-    runs-on: ubuntu-latest
-    needs: [build_android, build_ios]
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' }}
-    environment:
-      name: production
-    steps:
-      - run: echo "✅ Production deployment approved"
-
-  deploy_development:
-    name: Deploy to Development
-    runs-on: macos-14
-    needs: [approve_development]
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'development' }}
-    environment:
-      name: development
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download Android artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: android-build
-          path: android-artifacts
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-          working-directory: android
-
-      - name: Deploy Android to Internal Track
-        working-directory: android
-        env:
-          SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
-        run: |
-          bundle exec fastlane deploy_beta
-
-      - name: Download iOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: ios-build
-          path: ios-artifacts
-
-      - name: Upload iOS IPA to TestFlight (Dev)
-        working-directory: ios
-        env:
-          APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
-        run: |
-          bundle exec fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
-
-  deploy_qa:
-    name: Deploy to QA
-    runs-on: macos-15
-    needs: [approve_qa]
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'qa' }}
-    environment:
-      name: qa
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Deploy Android (QA)
-        working-directory: android
-        env:
-          SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
-        run: |
-          bundle exec fastlane deploy_beta
-
-      - name: Deploy iOS to TestFlight (QA)
-        working-directory: ios
-        env:
-          APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
-        run: |
-          bundle exec fastlane upload_testflight_ipa ipa:$(ls ../artifacts/ios-build/*.ipa | head -n1)
-
-  deploy_production:
-    name: Deploy to Production
-    runs-on: macos-15
-    needs: [approve_production]
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' }}
-    environment:
-      name: production
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Deploy Android to Production
-        working-directory: android
-        env:
-          SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
-        run: |
-          bundle exec fastlane deploy_production
-
-      - name: Upload iOS IPA to App Store
-        working-directory: ios
-        env:
-          APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
-        run: |
-          bundle exec fastlane upload_appstore_ipa ipa:$(ls ../artifacts/ios-build/*.ipa | head -n1)
