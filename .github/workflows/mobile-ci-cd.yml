@@ -92,13 +92,18 @@ jobs:
           bundler-cache: true
           working-directory: android
 
+      - name: Install Fastlane dependencies
+        working-directory: android
+        run: |
+          bundle config set --local frozen false
+          bundle install
+
       - name: Build Android release (AAB/APK)
         working-directory: android
         env:
           CI: true
           FASTLANE_SKIP_UPDATE_CHECK: true
         run: |
-          bundle install || gem install fastlane --no-document
           bundle exec fastlane build_release
 
       - name: Upload artifacts
@@ -138,12 +143,21 @@ jobs:
             bun run prebuild --platform ios --clean
           fi
 
+
+    
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: true
           working-directory: ios
+        
+      - name: Install Fastlane dependencies
+        working-directory: ios
+        run: |
+          bundle config set --local frozen false
+          bundle install
+        
 
       - name: Build iOS App Store IPA
         if: ${{ env.HAS_IOS_API_KEY == 'true' }}
@@ -154,7 +168,6 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
         run: |
-          bundle install || gem install fastlane --no-document
           bundle exec fastlane build_appstore_ipa
 
       - name: Upload artifacts
@@ -223,7 +236,6 @@ jobs:
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
-          bundle install || gem install fastlane --no-document
           bundle exec fastlane deploy_beta
 
       - name: Download iOS artifacts
@@ -237,7 +249,6 @@ jobs:
         env:
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
-          bundle install || gem install fastlane --no-document
           bundle exec fastlane upload_testflight_ipa ipa:$(ls ../ios-artifacts/*.ipa | head -n1)
 
   deploy_qa:
@@ -261,7 +272,6 @@ jobs:
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
-          bundle install || gem install fastlane --no-document
           bundle exec fastlane deploy_beta
 
       - name: Deploy iOS to TestFlight (QA)
@@ -269,12 +279,11 @@ jobs:
         env:
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
-          bundle install || gem install fastlane --no-document
           bundle exec fastlane upload_testflight_ipa ipa:$(ls ../artifacts/ios-build/*.ipa | head -n1)
 
   deploy_production:
     name: Deploy to Production
-    runs-on: macos-14
+    runs-on: macos-15
     needs: [approve_production]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' }}
     environment:
@@ -293,7 +302,6 @@ jobs:
         env:
           SUPPLY_JSON_KEY_DATA: ${{ secrets.ANDROID_SERVICE_ACCOUNT_JSON }}
         run: |
-          bundle install || gem install fastlane --no-document
           bundle exec fastlane deploy_production
 
       - name: Upload iOS IPA to App Store
@@ -301,5 +309,4 @@ jobs:
         env:
           APP_STORE_CONNECT_API_KEY_JSON: ${{ secrets.APP_STORE_CONNECT_API_KEY_JSON }}
         run: |
-          bundle install || gem install fastlane --no-document
           bundle exec fastlane upload_appstore_ipa ipa:$(ls ../artifacts/ios-build/*.ipa | head -n1)
