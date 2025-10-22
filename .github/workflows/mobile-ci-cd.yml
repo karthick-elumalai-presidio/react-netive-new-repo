@@ -90,13 +90,10 @@ jobs:
         with:
           ruby-version: '3.2'
           bundler-cache: true
-          working-directory: android
 
       - name: Install Fastlane dependencies
         working-directory: android
         run: |
-          pwd
-          ls -la
           bundle config set --local frozen false
           bundle install
 
@@ -152,13 +149,10 @@ jobs:
         with:
           ruby-version: '3.2'
           bundler-cache: true
-          working-directory: ios
         
       - name: Install Fastlane dependencies
         working-directory: ios
         run: |
-          pwd
-          ls -la
           bundle config set --local frozen false
           bundle install
         
