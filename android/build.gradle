@@ -27,3 +27,6 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
+
+// Apply expo-localization compatibility fix
+apply from: file("gradle/expo-localization-fix.gradle")

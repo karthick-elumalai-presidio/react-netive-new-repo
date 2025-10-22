@@ -90,6 +90,13 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace 'com.anonymous.CbM_mobile_app'
+    
+    // Fix for expo-localization Gradle compatibility
+    configurations.all {
+        resolutionStrategy {
+            force 'org.jetbrains.kotlin:kotlin-stdlib:2.0.21'
+        }
+    }
     defaultConfig {
         applicationId 'com.anonymous.CbM_mobile_app'
         minSdkVersion rootProject.ext.minSdkVersion
@@ -153,6 +160,7 @@ android {
         }
     }
 }
+
 
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin

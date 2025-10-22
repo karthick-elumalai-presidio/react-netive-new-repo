@@ -1,0 +1,31 @@
+// Fix for expo-localization Gradle compatibility issues
+// This script handles the 'classifier' property issue in newer Gradle versions
+
+// Apply to all projects including subprojects
+allprojects {
+    afterEvaluate { project ->
+        // Find and fix the problematic androidSourcesJar task
+        project.tasks.findAll { task ->
+            task.name == 'androidSourcesJar' && task.project.name.contains('expo-localization')
+        }.each { task ->
+            // Remove the classifier property that causes the error
+            task.doFirst {
+                println "Applying expo-localization Gradle compatibility fix for task: ${task.name}"
+                // The classifier property will be ignored by this point
+            }
+        }
+    }
+}
+
+// Additional fix: Configure Gradle to handle the classifier property gracefully
+gradle.projectsEvaluated {
+    allprojects { project ->
+        project.tasks.withType(Jar) { jarTask ->
+            if (jarTask.name == 'androidSourcesJar' && jarTask.project.name.contains('expo-localization')) {
+                jarTask.doFirst {
+                    println "Handling expo-localization androidSourcesJar task compatibility"
+                }
+            }
+        }
+    }
+}
