@@ -171,6 +171,26 @@ jobs:
             gem install fastlane --no-document
           fi
 
+      - name: Regenerate Android project for Expo SDK compatibility
+        run: |
+          echo "🔄 Regenerating Android project for Expo SDK compatibility..."
+          
+          # Clean existing Android project
+          rm -rf android
+          
+          # Regenerate Android project with current Expo SDK
+          npx expo prebuild --platform android --clean
+          
+          echo "✅ Android project regenerated successfully"
+          
+          # Verify the regenerated project
+          if [ ! -f "android/gradlew" ] || [ ! -f "android/build.gradle" ]; then
+            echo "❌ ERROR: Failed to regenerate Android project"
+            exit 1
+          fi
+          
+          echo "✅ Android project verification passed"
+
       - name: Clean Android autolinking cache
         working-directory: android
         run: |
