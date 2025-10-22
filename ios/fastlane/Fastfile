@@ -58,7 +58,7 @@ platform :ios do
       )
 
       build_app(
-        workspace: "CbMmobileapp.xcworkspace",
+        project: "CbMmobileapp.xcodeproj",
         scheme: "CbMmobileapp",
         configuration: "Debug",
         export_method: "development",
@@ -89,7 +89,7 @@ platform :ios do
     end
     
     build_app(
-      workspace: "CbMmobileapp.xcworkspace",
+      project: "CbMmobileapp.xcodeproj",
       scheme: "CbMmobileapp",
       configuration: "Release",
       export_method: "app-store"
@@ -109,7 +109,7 @@ platform :ios do
     end
     
     build_app(
-      workspace: "CbMmobileapp.xcworkspace",
+      project: "CbMmobileapp.xcodeproj",
       scheme: "CbMmobileapp",
       configuration: "Release",
       export_method: "app-store"
@@ -132,7 +132,7 @@ platform :ios do
     end
 
     build_app(
-      workspace: "CbMmobileapp.xcworkspace",
+      project: "CbMmobileapp.xcodeproj",
       scheme: "CbMmobileapp",
       configuration: "Debug",
       export_method: "development",
@@ -203,7 +203,7 @@ platform :ios do
       end
 
       build_app(
-        workspace: "CbMmobileapp.xcworkspace",
+        project: "CbMmobileapp.xcodeproj",
         scheme: "CbMmobileapp",
         configuration: "Release",
         export_method: "app-store",
