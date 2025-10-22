@@ -92,8 +92,10 @@ jobs:
           bundler-cache: true
 
       - name: Install Fastlane dependencies
-        working-directory: android
         run: |
+          cd android
+          pwd
+          ls -la Gemfile
           bundle config set --local frozen false
           bundle install
 
@@ -151,8 +153,10 @@ jobs:
           bundler-cache: true
         
       - name: Install Fastlane dependencies
-        working-directory: ios
         run: |
+          cd ios
+          pwd
+          ls -la Gemfile
           bundle config set --local frozen false
           bundle install
         
