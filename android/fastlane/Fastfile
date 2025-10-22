@@ -31,20 +31,19 @@ platform :android do
 
   desc "Build release APK and AAB"
   lane :build_release do
-    begin
-      gradle(
-        task: "bundleRelease assembleRelease",
-        project_dir: ".",
-        properties: {
-          "org.gradle.daemon" => "false",
-          "org.gradle.parallel" => "true"
-        }
-      )
-    rescue => ex
-      UI.error("Build failed: #{ex.message}")
-      UI.error("Full error: #{ex.backtrace.join('\n')}")
-      raise ex
-    end
+    gradle(
+      task: "bundleRelease assembleRelease",
+      project_dir: ".",
+      properties: {
+        "org.gradle.jvmargs" => "-Xmx4096m -XX:MaxMetaspaceSize=1024m -XX:+HeapDumpOnOutOfMemoryError",
+        "org.gradle.parallel" => "true",
+        "org.gradle.daemon" => "false",
+        "org.gradle.caching" => "true",
+        "android.enableJetifier" => "true",
+        "android.useAndroidX" => "true"
+      },
+      flags: "--no-daemon --parallel --max-workers=4"
+    )
   end
 
   desc "Deploy to Google Play Internal Testing"
