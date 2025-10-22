@@ -235,13 +235,29 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pods-
 
-      - name: Verify iOS project exists
+      - name: Backup Fastlane config (iOS)
         run: |
-          if [ ! -d "ios/CbMmobileapp.xcworkspace" ] && [ ! -d "ios/CbMmobileapp.xcodeproj" ]; then
-            echo "❌ iOS project not found! Please run 'expo prebuild --platform ios' locally first."
-            exit 1
+          mkdir -p /tmp/ios-fastlane-backup
+          cp -r ios/fastlane /tmp/ios-fastlane-backup/ || true
+          cp ios/Gemfile /tmp/ios-fastlane-backup/ || true
+          cp ios/Gemfile.lock /tmp/ios-fastlane-backup/ || true
+
+      - name: Expo prebuild (generate iOS native project)
+        run: |
+          if [ ! -d "ios/CbMmobileapp.xcworkspace" ]; then
+            echo "Running expo prebuild for iOS..."
+            bun run prebuild --platform ios --clean
           else
-            echo "✅ iOS project found, proceeding with build"
+            echo "iOS workspace exists, skipping prebuild"
+          fi
+
+      - name: Restore Fastlane config (iOS)
+        run: |
+          if [ -d "/tmp/ios-fastlane-backup/fastlane" ]; then
+            echo "Restoring custom Fastlane configuration..."
+            cp -r /tmp/ios-fastlane-backup/fastlane ios/
+            cp /tmp/ios-fastlane-backup/Gemfile ios/ || true
+            cp /tmp/ios-fastlane-backup/Gemfile.lock ios/ || true
           fi
 
       - name: Setup Ruby
