@@ -118,17 +118,8 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: false
+          bundler-cache: true
           working-directory: android
-
-      - name: Configure Bundler (Android)
-        working-directory: android
-        run: |
-          if [ -f Gemfile ]; then
-            bundle config set --local frozen false
-            bundle config set --local path 'vendor/bundle'
-            bundle install --jobs 4 --retry 3
-          fi
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -264,17 +255,9 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
-          bundler-cache: false
+          bundler-cache: true
           working-directory: ios
 
-      - name: Configure Bundler (iOS)
-        working-directory: ios
-        run: |
-          if [ -f Gemfile ]; then
-            bundle config set --local frozen false
-            bundle config set --local path 'vendor/bundle'
-            bundle install --jobs 4 --retry 3
-          fi
 
       - name: Install Fastlane deps (iOS)
         working-directory: ios
