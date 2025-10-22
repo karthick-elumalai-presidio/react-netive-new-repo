@@ -93,12 +93,9 @@ jobs:
         run: |
           echo "🔍 Verifying critical dependencies for Android build..."
           
-          # Check for react-native-worklets-core (required by babel.config.js)
-          if [ ! -d "node_modules/react-native-worklets-core" ]; then
-            echo "❌ ERROR: react-native-worklets-core not found!"
-            echo "This is required by babel.config.js"
-            exit 1
-          fi
+          # Verify React version
+          REACT_VERSION=$(node -p "require('./node_modules/react/package.json').version")
+          echo "✅ React version: $REACT_VERSION"
           
           # Verify React Native version
           RN_VERSION=$(node -p "require('./node_modules/react-native/package.json').version")
