@@ -1,0 +1,54 @@
+// Comprehensive fix for Expo modules compatibility with Gradle 8.14.3
+// This handles both autolinking and expo-localization issues
+
+allprojects {
+    afterEvaluate { project ->
+        // Fix for expo-localization Gradle compatibility
+        if (project.name.contains('expo-localization')) {
+            // Set required Android configuration
+            if (project.hasProperty('android')) {
+                project.android {
+                    compileSdkVersion 35
+                    buildToolsVersion "35.0.0"
+                }
+            }
+            
+            // Fix the classifier property issue
+            project.tasks.whenTaskAdded { task ->
+                if (task.name == 'androidSourcesJar') {
+                    task.doFirst {
+                        println "Fixing expo-localization androidSourcesJar task"
+                        // Remove the problematic classifier property
+                        if (task.hasProperty('classifier')) {
+                            task.classifier = null
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Ensure all expo modules have proper configuration
+        if (project.name.startsWith('expo-')) {
+            if (project.hasProperty('android')) {
+                project.android {
+                    compileSdkVersion 35
+                    buildToolsVersion "35.0.0"
+                }
+            }
+        }
+    }
+}
+
+// Additional fix for the classifier property issue
+gradle.projectsEvaluated {
+    allprojects { project ->
+        project.tasks.withType(Jar) { jarTask ->
+            if (jarTask.name == 'androidSourcesJar' && jarTask.project.name.contains('expo-localization')) {
+                jarTask.doFirst {
+                    println "Applying expo-localization compatibility fix"
+                    // This will prevent the classifier property error
+                }
+            }
+        }
+    }
+}

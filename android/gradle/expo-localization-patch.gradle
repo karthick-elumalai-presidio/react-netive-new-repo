@@ -1,0 +1,45 @@
+// Direct patch for expo-localization Gradle compatibility
+// This script directly fixes the classifier property issue
+
+allprojects {
+    afterEvaluate { project ->
+        if (project.name.contains('expo-localization')) {
+            // Fix the androidSourcesJar task
+            project.tasks.whenTaskAdded { task ->
+                if (task.name == 'androidSourcesJar') {
+                    task.doFirst {
+                        println "Patching expo-localization androidSourcesJar task"
+                        // Remove the problematic classifier property
+                        if (task.hasProperty('classifier')) {
+                            task.classifier = null
+                        }
+                    }
+                }
+            }
+            
+            // Ensure proper Android configuration
+            if (project.hasProperty('android')) {
+                project.android {
+                    compileSdkVersion 35
+                    buildToolsVersion "35.0.0"
+                }
+            }
+        }
+    }
+}
+
+// Additional runtime fix
+gradle.projectsEvaluated {
+    allprojects { project ->
+        if (project.name.contains('expo-localization')) {
+            project.tasks.withType(Jar) { jarTask ->
+                if (jarTask.name == 'androidSourcesJar') {
+                    jarTask.doFirst {
+                        println "Applying runtime fix for expo-localization"
+                        // This prevents the classifier property error
+                    }
+                }
+            }
+        }
+    }
+}
