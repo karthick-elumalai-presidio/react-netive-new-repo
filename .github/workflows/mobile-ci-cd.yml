@@ -258,25 +258,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: ''
+          cache: 'npm'
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Cache Bun dependencies
+      - name: Cache npm dependencies
         uses: actions/cache@v4
         with:
           path: |
-            ~/.bun/install/cache
+            ~/.npm
             node_modules
-          key: v4-${{ runner.os }}-bun-${{ hashFiles('**/package.json', '**/bun.lock') }}
+          key: v4-${{ runner.os }}-npm-ios-${{ hashFiles('**/package-lock.json', '**/package.json') }}
           restore-keys: |
-            v4-${{ runner.os }}-bun-
+            v4-${{ runner.os }}-npm-ios-
 
-      - name: Install JS dependencies
-        run: bun install --frozen-lockfile || bun install
+      - name: Install JS dependencies (using npm for CocoaPods compatibility)
+        run: |
+          echo "📦 Installing JavaScript dependencies with npm..."
+          echo "Using npm instead of bun for iOS builds to ensure CocoaPods compatibility"
+          npm ci --legacy-peer-deps || npm install --legacy-peer-deps || npm install
+          echo "✅ Dependencies installed with npm"
 
       - name: Check iOS native project
         run: |
@@ -290,6 +289,34 @@ jobs:
             echo "✅ iOS native project found - proceeding with build"
           fi
 
+      - name: Verify Node.js dependencies for iOS
+        run: |
+          echo "🔍 Verifying Node.js dependencies before pod install..."
+          echo "Current directory: $(pwd)"
+          echo "Node version: $(node --version)"
+          echo "npm version: $(npm --version)"
+          
+          # Verify critical packages exist
+          if [ ! -d "node_modules/expo" ]; then
+            echo "❌ ERROR: expo package not found in node_modules"
+            exit 1
+          fi
+          
+          if [ ! -d "node_modules/react-native" ]; then
+            echo "❌ ERROR: react-native package not found in node_modules"
+            exit 1
+          fi
+          
+          if [ ! -d "node_modules/expo-router" ]; then
+            echo "❌ ERROR: expo-router package not found in node_modules"
+            exit 1
+          fi
+          
+          echo "✅ All critical Node.js dependencies verified"
+          echo ""
+          echo "Checking package.json location:"
+          ls -la package.json
+          
       - name: Cache CocoaPods
         uses: actions/cache@v4
         with:
@@ -297,15 +324,59 @@ jobs:
             ios/Pods
             ~/Library/Caches/CocoaPods
             ~/.cocoapods
-          key: v4-${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock', 'ios/Podfile', 'package.json') }}
+          key: v5-${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock', 'ios/Podfile', 'package.json') }}
           restore-keys: |
-            v4-${{ runner.os }}-pods-
+            v5-${{ runner.os }}-pods-
+
+      - name: Clean CocoaPods cache if corrupted
+        run: |
+          echo "🧹 Cleaning potential CocoaPods cache issues..."
+          cd ios
+          # Remove Pods directory to ensure fresh install
+          rm -rf Pods
+          rm -rf ~/Library/Caches/CocoaPods
+          rm -rf ~/.cocoapods
+          echo "✅ CocoaPods cache cleaned"
 
       - name: Install CocoaPods dependencies
-        working-directory: ios
         run: |
           echo "📦 Installing pods to create .xcworkspace..."
-          pod install --repo-update
+          echo "Current directory: $(pwd)"
+          echo "Changing to ios directory..."
+          cd ios
+          
+          # Verify we can resolve node modules from here
+          echo "Testing node module resolution from ios/ directory:"
+          node --print "require.resolve('expo/package.json')" || {
+            echo "❌ ERROR: Cannot resolve expo/package.json from ios directory"
+            echo "Checking parent directory for node_modules:"
+            ls -la ../node_modules/ | head -20
+            exit 1
+          }
+          
+          echo "✅ Node module resolution working"
+          echo ""
+          echo "CocoaPods version: $(pod --version)"
+          echo ""
+          echo "Running pod install..."
+          
+          # Try pod install without --repo-update first (faster and often more reliable)
+          pod install || {
+            echo "⚠️  First pod install attempt failed, trying with --repo-update..."
+            pod install --repo-update || {
+              echo "❌ Pod install failed. Checking for more details..."
+              echo ""
+              echo "Podfile contents:"
+              cat Podfile
+              echo ""
+              echo "Checking if package.json exists in parent:"
+              ls -la ../package.json
+              echo ""
+              echo "Checking expo-router installation:"
+              ls -la ../node_modules/expo-router/ios/ || echo "expo-router ios directory not found"
+              exit 1
+            }
+          }
           
           # Verify workspace was created
           if [ ! -d "CbMmobileapp.xcworkspace" ]; then
